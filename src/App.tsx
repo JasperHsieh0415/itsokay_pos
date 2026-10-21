@@ -32,6 +32,7 @@ type MenuResponse = {
 
 function App() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [activeCategory, setActiveCategory] = useState<number | null>(null);;
   const [search, setSearch] = useState('');
   const [diningMode, setDiningMode] = useState<'dinein' | 'takeout'>('dinein');
@@ -129,10 +130,25 @@ const filteredProducts = useMemo(() => {
   });
 }, [products, activeCategory, search]);
 
+const groupedProducts = useMemo(() => {
+  return mainCategories
+    .map((category) => ({
+      category,
+      items: filteredProducts.filter(
+        (product) => product.main_category_id === category.id
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
+}, [mainCategories, filteredProducts]);
+
   // 目前選取的主分類
   const currentCategory = mainCategories.find(
     (category) => category.id === activeCategory
   );
+
+  function toggleProduct(productId: number) {
+    setSelectedProductId((current) => current === productId ? null : productId);
+  }
 
   return (
     <div className="pos-page">
@@ -204,8 +220,12 @@ const filteredProducts = useMemo(() => {
             {category.id === 1 ? '🍲' :
             category.id === 2 ? '🍝' :
             category.id === 3 ? '🥪' :
-            category.id === 4 ? '🥗' :
-            category.id === 5 ? '🥤' : '🍽️'}
+            category.id === 4 ? '🥖' :
+            category.id === 5 ? '🍮' :
+            category.id === 6 ? '🥗' :
+            category.id === 7 ? '☕' :
+            category.id === 8 ? '🥤' :
+            category.id === 9 ? '🍵' : '🍽️'}
           </span>
 
           <span className="category-name">
@@ -247,37 +267,97 @@ const filteredProducts = useMemo(() => {
         )}
 
         {!loading && !error && (
-          <div className="product-grid">
-            {filteredProducts.map((product) => (
-              <article className="product-card" key={product.id}>
-                <div className="product-card-top">
-                  <h2>{product.name}</h2>
-                  <span className="product-arrow">›</span>
-                </div>
+          activeCategory === null ? (
+            <div className="category-groups">
+              {groupedProducts.map(({ category, items }) => (
+                <section className="category-group" key={category.id}>
+                  <div className="category-group-heading">
+                    <h2>{category.name}</h2>
 
-                <span className="product-id">
-                  {product.product_code} · {product.english_name}
-                </span>
+                    <span className="category-group-en">
+                      {category.english_name}
+                    </span>
 
-                <span className="product-sale-type">
-                  {product.sale_type === 'set' ? '套餐' : '單點'}
-                </span>
+                    <span className="category-group-count">
+                      {items.length} 項
+                    </span>
+                  </div>
 
-                <div className="product-price">
-                  NT$ {product.price.toLocaleString('zh-TW')}
-                </div>
-
-                {product.description && (
-                  <p className="product-description">
-                    {product.description}
-                  </p>
-                )}
-              </article>
-            ))}
-          </div>
+                  <div className="product-grid">
+                    {items.map((product) => (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        selected={selectedProductId === product.id}
+                        onSelect={() => toggleProduct(product.id)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <div className="product-grid">
+              {filteredProducts.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  selected={selectedProductId === product.id}
+                  onSelect={() => toggleProduct(product.id)}
+                />
+              ))}
+            </div>
+          )
         )}
       </main>
     </div>
+  );
+}
+
+function ProductCard({
+  product,
+  selected,
+  onSelect,
+}: {
+  product: Product;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <article
+      className={`product-card${selected ? ' is-selected' : ''}`}
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          if (!event.repeat) onSelect();
+        }
+      }}
+    >
+      <div className="product-card-top">
+        <h2>{product.name}</h2>
+        <span className="product-arrow">›</span>
+      </div>
+
+      {product.english_name && (
+        <span className="product-english-name">
+          {product.english_name}
+        </span>
+      )}
+
+      <div className="product-price">
+        NT$ {product.price.toLocaleString('zh-TW')}
+      </div>
+
+      {product.description && (
+        <p className="product-description">
+          {product.description}
+        </p>
+      )}
+    </article>
   );
 }
 

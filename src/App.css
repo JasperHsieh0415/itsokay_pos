@@ -197,12 +197,46 @@
 }
 
 .product-card {
+  position: relative;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 180ms ease, box-shadow 180ms ease,
+    border-color 180ms ease, background-color 180ms ease;
   background: rgba(255, 255, 255, 0.94);
   border-radius: 11px;
   padding: 20px 22px;
   min-height: 190px;
   box-sizing: border-box;
   box-shadow: 0 3px 14px rgba(105, 72, 44, 0.025);
+}
+
+.product-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(105, 72, 44, 0.12);
+}
+
+.product-card.is-selected {
+  z-index: 1;
+  transform: translateY(-6px);
+  border-color: #744a32;
+  background: #fffaf3;
+  box-shadow: 0 12px 24px rgba(105, 72, 44, 0.22),
+    0 4px 8px rgba(105, 72, 44, 0.1);
+}
+
+.product-card:focus-visible {
+  outline: 3px solid #744a32;
+  outline-offset: 3px;
+}
+
+.product-card:active {
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-card {
+    transition: none;
+  }
 }
 
 .product-card-top {
@@ -227,6 +261,15 @@
 .product-id {
   color: #85818a;
   font-size: 13px;
+}
+
+.product-english-name {
+  display: block;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: #777;
+  margin-top: 4px;
 }
 
 .product-price {
@@ -254,6 +297,47 @@
 
 .message.error {
   color: #bb3030;
+}
+
+/* 全部分類的分組容器 */
+.category-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+/* 單一分類區塊 */
+.category-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 分類標題 */
+.category-group-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.category-group-heading h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #252525;
+}
+
+.category-group-en {
+  font-size: 16px;
+  color: #888;
+}
+
+.category-group-count {
+  margin-left: auto;
+  font-size: 13px;
+  color: #999;
 }
 
 /* Tablet */
