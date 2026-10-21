@@ -19,7 +19,7 @@
 	"upload_source_maps": true,
 	"d1_databases": [
 		{
-			"binding": "restaurant_pos_db",
+			"binding": "DB",
 			"database_name": "restaurant-pos-db",
 			"database_id": "90c00e30-eb28-40b7-8c6e-f02d798f4d52"
 		}
