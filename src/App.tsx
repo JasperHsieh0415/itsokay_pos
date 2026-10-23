@@ -1,5 +1,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
+import OrderSidebar, {
+  type CartItem,
+} from './components/OrderSidebar';
 import './App.css';
 
 type Product = {
@@ -30,8 +33,15 @@ type MenuResponse = {
   data: Product[];
 };
 
+const drinkOptions = [
+  { id: 7, name: '咖啡', english_name: 'Coffee' },
+  { id: 8, name: '特調', english_name: 'Special Drinks' },
+  { id: 9, name: '茶品', english_name: 'Tea' },
+];
+
 function App() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [activeCategory, setActiveCategory] = useState<number | null>(null);;
   const [search, setSearch] = useState('');
@@ -101,22 +111,50 @@ useEffect(() => {
   fetchCategories();
 }, []);
 
-// 取得主分類
+// 將咖啡、特調、茶飲合併為飲品分類。
 const mainCategories = useMemo(() => {
-  return categories
+  const drinkCategoryIds = [7, 8, 9];
+  const sortedCategories = categories
     .filter((category) => category.parent_id === null)
     .sort((a, b) => a.sort_order - b.sort_order);
+  const firstDrinkCategory = sortedCategories.find((category) =>
+    drinkCategoryIds.includes(category.id)
+  );
+
+  return sortedCategories
+    .filter((category) =>
+      !drinkCategoryIds.includes(category.id) ||
+      category.id === firstDrinkCategory?.id
+    )
+    .map((category) =>
+      drinkCategoryIds.includes(category.id)
+        ? {
+            ...category,
+            name: '飲品',
+            english_name: 'Drinks',
+            categoryIds: drinkCategoryIds,
+          }
+        : { ...category, categoryIds: [category.id] }
+    );
 }, [categories]);
+
+const currentCategory = mainCategories.find(
+  (category) => category.id === activeCategory
+);
+
+const isDrinkCategory = drinkOptions.some((option) =>
+  currentCategory?.categoryIds.includes(option.id)
+);
 
 // 依主分類與搜尋文字過濾商品
 const filteredProducts = useMemo(() => {
   const keyword = search.trim().toLowerCase();
 
   return products.filter((product) => {
-    // 根據 D1 主分類 ID 篩選
+    // 依顯示分類包含的 D1 主分類 ID 篩選
     const matchCategory =
       activeCategory === null ||
-      product.main_category_id === activeCategory;
+      currentCategory?.categoryIds.includes(product.main_category_id) === true;
 
     // 同時支援中文、英文、商品編號搜尋
     const matchSearch =
@@ -128,27 +166,72 @@ const filteredProducts = useMemo(() => {
 
     return matchCategory && matchSearch;
   });
-}, [products, activeCategory, search]);
+}, [products, activeCategory, currentCategory, search]);
 
 const groupedProducts = useMemo(() => {
-  return mainCategories
+  const displayCategories = isDrinkCategory
+    ? drinkOptions.map((option) => ({ ...option, categoryIds: [option.id] }))
+    : mainCategories;
+
+  return displayCategories
     .map((category) => ({
       category,
       items: filteredProducts.filter(
-        (product) => product.main_category_id === category.id
+        (product) => category.categoryIds.includes(product.main_category_id)
       ),
     }))
     .filter((group) => group.items.length > 0);
-}, [mainCategories, filteredProducts]);
+}, [mainCategories, filteredProducts, isDrinkCategory]);
 
-  // 目前選取的主分類
-  const currentCategory = mainCategories.find(
-    (category) => category.id === activeCategory
-  );
 
-  function toggleProduct(productId: number) {
-    setSelectedProductId((current) => current === productId ? null : productId);
-  }
+  const handleAddToCart = (product: Product) => {
+    setSelectedProductId(product.id);
+    setCartItems((prev) => {
+      const existingItem = prev.find((item) => item.productId === product.id);
+
+      if (existingItem) {
+        return prev;
+      }
+
+      return [
+        ...prev,
+        {
+          cartId: String(product.id),
+          productId: product.id,
+          productCode: product.product_code,
+          name: product.name,
+          price: product.price,
+          quantity: 1,
+        },
+      ];
+    });
+  };
+
+  const handleQuantityChange = (
+    cartId: string,
+    quantity: number
+  ) => {
+    setCartItems((prev) => {
+      if (quantity <= 0) {
+        return prev.filter((item) => item.cartId !== cartId);
+      }
+
+      return prev.map((item) =>
+        item.cartId === cartId
+          ? { ...item, quantity }
+          : item
+      );
+    });
+  };
+
+  const handleClearOrder = () => {
+    setCartItems([]);
+  };
+
+  const handleCheckout = () => {
+    // 尚未建立訂單 API，先保留操作入口
+    console.log('Checkout requested:', cartItems);
+  };
 
   return (
     <div className="pos-page">
@@ -239,7 +322,7 @@ const groupedProducts = useMemo(() => {
       ))}
     </nav>
 
-
+    <div className="pos-content">
       <main className="menu-section">
         <div className="menu-heading">
           <h1>{currentCategory?.name ?? '全部'}</h1>
@@ -267,7 +350,7 @@ const groupedProducts = useMemo(() => {
         )}
 
         {!loading && !error && (
-          activeCategory === null ? (
+          activeCategory === null || isDrinkCategory ? (
             <div className="category-groups">
               {groupedProducts.map(({ category, items }) => (
                 <section className="category-group" key={category.id}>
@@ -289,7 +372,7 @@ const groupedProducts = useMemo(() => {
                         key={product.id}
                         product={product}
                         selected={selectedProductId === product.id}
-                        onSelect={() => toggleProduct(product.id)}
+                        onSelect={() => handleAddToCart(product)}
                       />
                     ))}
                   </div>
@@ -303,13 +386,22 @@ const groupedProducts = useMemo(() => {
                   key={product.id}
                   product={product}
                   selected={selectedProductId === product.id}
-                  onSelect={() => toggleProduct(product.id)}
+                  onSelect={() => handleAddToCart(product)}
                 />
               ))}
             </div>
           )
         )}
       </main>
+      <OrderSidebar
+        items={cartItems}
+        diningMode={diningMode}
+        onQuantityChange={handleQuantityChange}
+        onClear={handleClearOrder}
+        onCheckout={handleCheckout}
+      />
+    </div>
+
     </div>
   );
 }
