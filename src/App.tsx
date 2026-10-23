@@ -5,6 +5,12 @@ import OrderSidebar, {
 } from './components/OrderSidebar';
 import './App.css';
 
+import ProductCustomizationModal, {
+  type SelectedOption,
+} from './components/ProductCustomizationModal';
+
+import { productOptions } from './data/productOptions';
+
 type Product = {
   id: number;
   product_code: string;
@@ -49,6 +55,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -184,28 +191,99 @@ const groupedProducts = useMemo(() => {
 }, [mainCategories, filteredProducts, isDrinkCategory]);
 
 
-  const handleAddToCart = (product: Product) => {
-    setSelectedProductId(product.id);
-    setCartItems((prev) => {
-      const existingItem = prev.find((item) => item.productId === product.id);
+  // const handleAddToCart = (product: Product) => {
+  //   setSelectedProductId(product.id);
+  //   setCartItems((prev) => {
+  //     const existingItem = prev.find((item) => item.productId === product.id);
 
-      if (existingItem) {
-        return prev;
+  //     if (existingItem) {
+  //       return prev;
+  //     }
+
+  //     return [
+  //       ...prev,
+  //       {
+  //         cartId: String(product.id),
+  //         productId: product.id,
+  //         productCode: product.product_code,
+  //         name: product.name,
+  //         price: product.price,
+  //         quantity: 1,
+  //       },
+  //     ];
+  //   });
+  // };
+
+
+  const addToCart = (
+    product: Product,
+    selectedOptions: SelectedOption[] = [],
+    unitPrice: number = product.price,
+    quantity: number = 1
+  ) => {
+    // 相同商品 + 相同客製化選項，視為同一筆購物車項目
+    const optionKey = selectedOptions
+      .map((option) => `${option.groupId}:${option.optionId}`)
+      .sort()
+      .join('|');
+
+    const cartId = JSON.stringify([
+      product.id,
+      optionKey,
+    ]);
+
+    setCartItems((prev) => {
+      const existing = prev.find(
+        (item) => item.cartId === cartId
+      );
+
+      if (existing) {
+        return prev.map((item) =>
+          item.cartId === cartId
+            ? { ...item, quantity: item.quantity + quantity }
+            : item
+        );
       }
 
       return [
         ...prev,
         {
-          cartId: String(product.id),
+          cartId,
           productId: product.id,
           productCode: product.product_code,
           name: product.name,
-          price: product.price,
-          quantity: 1,
+          price: unitPrice,
+          quantity,
+          selectedOptions,
         },
       ];
     });
   };
+
+  // 商品卡片點擊事件
+  const handleProductClick = (product: Product) => {
+    setSelectedProductId(product.id);
+    setSelectedProduct(product);
+  };
+
+  // 彈窗確認
+  const handleCustomizationConfirm = (
+    selectedOptions: SelectedOption[],
+    unitPrice: number,
+    quantity: number
+  ) => {
+    if (!selectedProduct) return;
+
+    addToCart(
+      selectedProduct,
+      selectedOptions,
+      unitPrice,
+      quantity
+    );
+
+    setSelectedProduct(null);
+  };
+
 
   const handleQuantityChange = (
     cartId: string,
@@ -372,7 +450,7 @@ const groupedProducts = useMemo(() => {
                         key={product.id}
                         product={product}
                         selected={selectedProductId === product.id}
-                        onSelect={() => handleAddToCart(product)}
+                        onSelect={() => handleProductClick(product)}
                       />
                     ))}
                   </div>
@@ -386,7 +464,7 @@ const groupedProducts = useMemo(() => {
                   key={product.id}
                   product={product}
                   selected={selectedProductId === product.id}
-                  onSelect={() => handleAddToCart(product)}
+                  onSelect={() => handleProductClick(product)}
                 />
               ))}
             </div>
@@ -401,6 +479,18 @@ const groupedProducts = useMemo(() => {
         onCheckout={handleCheckout}
       />
     </div>
+    {/* 客製化彈跳視窗 */}
+    {selectedProduct && (
+      <ProductCustomizationModal
+        key={selectedProduct.id}
+        product={selectedProduct}
+        groups={
+          productOptions[selectedProduct.product_code] ?? []
+        }
+        onClose={() => setSelectedProduct(null)}
+        onConfirm={handleCustomizationConfirm}
+      />
+    )}
 
     </div>
   );

@@ -1,13 +1,15 @@
 
 import './OrderSidebar.css';
+import type { SelectedOption } from './ProductCustomizationModal';
 
 export type CartItem = {
   cartId: string;
   productId: number;
   productCode: string;
   name: string;
-  price: number;
+  price: number; // 已包含客製化加價的單份價格
   quantity: number;
+  selectedOptions: SelectedOption[];
 };
 
 type OrderSidebarProps = {
@@ -75,12 +77,38 @@ function OrderSidebar({
                   <div className="order-item-info">
                     <h3>{item.name}</h3>
                     <small>{item.productCode}</small>
+                    {item.selectedOptions.length > 0 && (
+                    <div className="order-item-options">
+                        {item.selectedOptions.map((option) => (
+                        <div
+                            key={`${option.groupId}-${option.optionId}`}
+                            className="order-item-option"
+                        >
+                            <span>＋ {option.name}</span>
+                            {option.priceDelta > 0 && (
+                            <span>+ NT$ {option.priceDelta}</span>
+                            )}
+                        </div>
+                        ))}
+                    </div>
+                    )}
                   </div>
 
-                  <strong>
-                    NT$ {(item.price * item.quantity)
-                      .toLocaleString('zh-TW')}
-                  </strong>
+                  <div className="order-item-actions">
+                    <strong>
+                      NT$ {(item.price * item.quantity)
+                        .toLocaleString('zh-TW')}
+                    </strong>
+                    <button
+                      type="button"
+                      className="order-item-remove"
+                      aria-label={`移除 ${item.name}`}
+                      title="移除品項"
+                      onClick={() => onQuantityChange(item.cartId, 0)}
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
 
                 <div className="order-item-bottom">
