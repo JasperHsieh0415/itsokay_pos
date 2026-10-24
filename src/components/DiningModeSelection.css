@@ -1,0 +1,103 @@
+
+.entry-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: radial-gradient(
+    circle at 50% 0%,
+    #fffaf3,
+    #f8eddf 75%
+  );
+}
+
+.entry-card {
+  width: 100%;
+  max-width: 560px;
+  padding: 48px 36px;
+  box-sizing: border-box;
+  border-radius: 18px;
+  background: white;
+  text-align: center;
+  box-shadow: 0 12px 35px rgba(105, 72, 44, 0.08);
+}
+
+.entry-brand {
+  margin-bottom: 36px;
+  color: #58301d;
+}
+
+.entry-brand h1 {
+  margin: 0;
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: 42px;
+}
+
+.entry-brand h2 {
+  margin: 8px 0 0;
+  font-size: 24px;
+}
+
+.entry-card > h3 {
+  margin: 0 0 8px;
+  font-size: 24px;
+  color: #58301d;
+}
+
+.entry-card > p {
+  margin: 0 0 30px;
+  color: #988779;
+}
+
+.dining-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.dining-options button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 32px 16px;
+  border: 2px solid #eee2d6;
+  border-radius: 12px;
+  background: #fffaf5;
+  color: #58301d;
+  cursor: pointer;
+}
+
+.dining-options button:hover {
+  border-color: #744a32;
+  background: #f5e8da;
+}
+
+.dining-option-icon {
+  font-size: 38px;
+}
+
+.dining-options strong {
+  font-size: 22px;
+}
+
+.dining-options small {
+  color: #9b8c80;
+}
+
+@media (max-width: 480px) {
+  .entry-card {
+    padding: 32px 20px;
+  }
+
+  .dining-options {
+    gap: 10px;
+  }
+
+  .dining-options button {
+    padding: 26px 8px;
+  }
+}

@@ -15,6 +15,7 @@ export type CartItem = {
 type OrderSidebarProps = {
   items: CartItem[];
   diningMode: 'dinein' | 'takeout';
+  tableId?: string | null;
   onQuantityChange: (cartId: string, quantity: number) => void;
   onClear: () => void;
   onCheckout: () => void;
@@ -23,6 +24,7 @@ type OrderSidebarProps = {
 function OrderSidebar({
   items,
   diningMode,
+  tableId,
   onQuantityChange,
   onClear,
   onCheckout,
@@ -56,9 +58,12 @@ function OrderSidebar({
         <span>
           {diningMode === 'dinein' ? '☕ 內用' : '🛍 外帶'}
         </span>
-        <span>
-          {diningMode === 'dinein' ? 'Dine in' : 'Take out'}
-        </span>
+
+        <strong>
+          {diningMode === 'dinein'
+            ? `桌號 ${tableId ?? '未選擇'}`
+            : 'Take out'}
+        </strong>
       </div>
 
       {/* Cart Items */}

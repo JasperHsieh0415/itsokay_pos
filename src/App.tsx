@@ -10,6 +10,8 @@ import ProductCustomizationModal, {
 } from './components/ProductCustomizationModal';
 
 import { productOptions } from './data/productOptions';
+import DiningModeSelection from './components/DiningModeSelection';
+import TableSelection from './components/TableSelection';
 
 type Product = {
   id: number;
@@ -39,6 +41,11 @@ type MenuResponse = {
   data: Product[];
 };
 
+type OrderStep =
+  | 'dining-mode'
+  | 'table-selection'
+  | 'menu';
+
 const drinkOptions = [
   { id: 7, name: '咖啡', english_name: 'Coffee' },
   { id: 8, name: '特調', english_name: 'Special Drinks' },
@@ -56,6 +63,27 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [orderStep, setOrderStep] = useState<OrderStep>('dining-mode');
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+
+
+  const handleDiningModeSelect = (
+    mode: 'dinein' | 'takeout'
+  ) => {
+    setDiningMode(mode);
+    setSelectedTableId(null);
+
+    if (mode === 'dinein') {
+      setOrderStep('table-selection');
+    } else {
+      setOrderStep('menu');
+    }
+  };
+
+  const handleTableConfirm = (tableId: string) => {
+    setSelectedTableId(tableId);
+    setOrderStep('menu');
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -311,6 +339,24 @@ const groupedProducts = useMemo(() => {
     console.log('Checkout requested:', cartItems);
   };
 
+  if (orderStep === 'dining-mode') {
+    return (
+      <DiningModeSelection
+        onSelect={handleDiningModeSelect}
+      />
+    );
+  }
+
+  if (orderStep === 'table-selection') {
+    return (
+      <TableSelection
+        initialTableId={selectedTableId}
+        onConfirm={handleTableConfirm}
+        onBack={() => setOrderStep('dining-mode')}
+      />
+    );
+  }
+
   return (
     <div className="pos-page">
       <header className="pos-header">
@@ -327,14 +373,14 @@ const groupedProducts = useMemo(() => {
             <button
               type="button"
               className={diningMode === 'dinein' ? 'selected' : ''}
-              onClick={() => setDiningMode('dinein')}
+              onClick={() => handleDiningModeSelect('dinein')}
             >
               ☕ 內用 <small>Dine in</small>
             </button>
             <button
               type="button"
               className={diningMode === 'takeout' ? 'selected' : ''}
-              onClick={() => setDiningMode('takeout')}
+              onClick={() => handleDiningModeSelect('takeout')}
             >
               🛍 外帶 <small>Take out</small>
             </button>
@@ -477,6 +523,7 @@ const groupedProducts = useMemo(() => {
         onQuantityChange={handleQuantityChange}
         onClear={handleClearOrder}
         onCheckout={handleCheckout}
+        tableId={selectedTableId}
       />
     </div>
     {/* 客製化彈跳視窗 */}
