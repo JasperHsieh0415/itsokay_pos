@@ -44,7 +44,8 @@ type MenuResponse = {
 type OrderStep =
   | 'dining-mode'
   | 'table-selection'
-  | 'menu';
+  | 'menu'
+  | 'order-success';
 
 const drinkOptions = [
   { id: 7, name: '咖啡', english_name: 'Coffee' },
@@ -65,6 +66,9 @@ function App() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [orderStep, setOrderStep] = useState<OrderStep>('dining-mode');
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [submittingOrder, setSubmittingOrder] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const [createdOrderNumber, setCreatedOrderNumber] = useState<string | null>(null);
 
 
   const handleDiningModeSelect = (
@@ -334,10 +338,91 @@ const groupedProducts = useMemo(() => {
     setCartItems([]);
   };
 
-  const handleCheckout = () => {
-    // 尚未建立訂單 API，先保留操作入口
-    console.log('Checkout requested:', cartItems);
+
+  const handleNewOrder = () => {
+    setCartItems([]);
+    setSelectedProductId(null);
+    setSelectedProduct(null);
+    setActiveCategory(null);
+    setSearch('');
+    setDiningMode('dinein');
+    setSelectedTableId(null);
+    setOrderError(null);
+    setCreatedOrderNumber(null);
+    setOrderStep('dining-mode');
   };
+
+  const handleCheckout = async () => {
+    if (submittingOrder || cartItems.length === 0) {
+      return;
+    }
+
+    if (diningMode === 'dinein' && !selectedTableId) {
+      setOrderError('請先選擇桌位');
+      return;
+    }
+
+    // 目前後端尚未實作客製化選項計價。
+    // 不可忽略客製化資訊直接送出原價訂單。
+    const hasCustomization = cartItems.some(
+      (item) => (item.selectedOptions?.length ?? 0) > 0
+    );
+
+    if (hasCustomization) {
+      setOrderError(
+        '目前尚未支援客製化餐點送單，請先完成後端客製化選項計價'
+      );
+      return;
+    }
+
+    setSubmittingOrder(true);
+    setOrderError(null);
+    setCreatedOrderNumber(null);
+
+    try {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          dining_mode: diningMode,
+          table_id:
+            diningMode === 'dinein'
+              ? selectedTableId
+              : null,
+          items: cartItems.map((item) => ({
+            product_code: item.productCode,
+            quantity: item.quantity,
+          })),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.error ?? '建立訂單失敗'
+        );
+      }
+
+      setCreatedOrderNumber(result.data.order_number);
+      setCartItems([]);
+      setOrderStep('order-success');
+
+    } catch (error) {
+      console.error('Checkout failed:', error);
+
+      setOrderError(
+        error instanceof Error
+          ? error.message
+          : '訂單送出失敗'
+      );
+    } finally {
+      setSubmittingOrder(false);
+    }
+  };
+
 
   if (orderStep === 'dining-mode') {
     return (
@@ -356,6 +441,46 @@ const groupedProducts = useMemo(() => {
       />
     );
   }
+
+
+  if (orderStep === 'order-success') {
+    return (
+      <div className="order-success-page">
+        <div className="order-success-card">
+          <div className="order-success-icon">✓</div>
+
+          <h1>訂單建立成功！</h1>
+
+          <p>您的訂單已成功送出</p>
+
+          <div className="order-success-details">
+            <span>訂單編號</span>
+
+            <strong>
+              {createdOrderNumber}
+            </strong>
+
+            <span>用餐方式</span>
+
+            <strong>
+              {diningMode === 'dinein'
+                ? `內用 · ${selectedTableId}`
+                : '外帶'}
+            </strong>
+          </div>
+
+          <button
+            type="button"
+            className="new-order-button"
+            onClick={handleNewOrder}
+          >
+            ＋ 開始新訂單
+          </button>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="pos-page">
@@ -517,6 +642,12 @@ const groupedProducts = useMemo(() => {
           )
         )}
       </main>
+      {orderError && (
+        <div role="alert" className="message error">
+          {orderError}
+        </div>
+      )}
+
       <OrderSidebar
         items={cartItems}
         diningMode={diningMode}
