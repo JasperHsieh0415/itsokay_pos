@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 type Bindings = {
   DB: D1Database;
   ADMIN_API_KEY: string;
+  CHEF_API_KEY: string;
 };
 
 type OrderStatus =
@@ -113,6 +114,7 @@ type ProductRow = {
   name: string;
   price: number;
   available: number;
+  station: 'kitchen' | 'bar' | 'none';
 };
 
 const VALID_TABLE_IDS = new Set([
@@ -261,7 +263,8 @@ app.post('/api/orders', async (c) => {
           product_code,
           name,
           price,
-          available
+          available,
+          station
         FROM products
         WHERE product_code IN (${placeholders})
       `)
@@ -312,6 +315,13 @@ app.post('/api/orders', async (c) => {
         quantity: item.quantity,
         unitPrice: product.price,
         lineTotal,
+
+        station: product.station,
+
+        kitchenStatus:
+          product.station === 'kitchen'
+            ? 'pending'
+            : 'not_required',
       });
     }
 
@@ -361,9 +371,11 @@ app.post('/api/orders', async (c) => {
             product_name,
             quantity,
             unit_price,
-            line_total
+            line_total,
+            station,
+            kitchen_status
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
           item.id,
           orderId,
@@ -371,7 +383,9 @@ app.post('/api/orders', async (c) => {
           item.productName,
           item.quantity,
           item.unitPrice,
-          item.lineTotal
+          item.lineTotal,
+          item.station,
+          item.kitchenStatus
         )
       ),
     ];
@@ -417,13 +431,18 @@ type OrderItemRow = {
   quantity: number;
   unit_price: number;
   line_total: number;
+  station: 'kitchen' | 'bar' | 'none';
+  kitchen_status: 'not_required' | 'pending' | 'preparing' | 'ready';
 };
 
 const NEXT_STATUS: Record<OrderStatus, OrderStatus[]> = {
-  pending: ['confirmed', 'cancelled'],
-  confirmed: ['preparing', 'ready', 'cancelled'],
-  preparing: ['ready'],
-  ready: ['completed'],
+  pending: ['completed', 'cancelled'],
+
+  // 相容先前已存在的測試訂單
+  confirmed: ['completed', 'cancelled'],
+  preparing: ['completed', 'cancelled'],
+  ready: ['completed', 'cancelled'],
+
   completed: [],
   cancelled: [],
 };
@@ -450,6 +469,35 @@ app.use('/api/admin/*', async (c, next) => {
   await next();
 });
 
+// Chef API 身分驗證
+app.use('/api/chef/*', async (c, next) => {
+  const configuredKey = c.env.CHEF_API_KEY;
+  const supplied = c.req.header('Authorization');
+
+  if (!configuredKey) {
+    return c.json(
+      {
+        success: false,
+        error: 'Chef API not configured',
+      },
+      503
+    );
+  }
+
+  if (supplied !== `Bearer ${configuredKey}`) {
+    return c.json(
+      {
+        success: false,
+        error: 'Unauthorized',
+      },
+      401
+    );
+  }
+
+  await next();
+});
+
+
 // 取得最近 50 筆訂單與商品明細
 app.get('/api/admin/orders', async (c) => {
   try {
@@ -474,7 +522,7 @@ app.get('/api/admin/orders', async (c) => {
     const itemResult = await c.env.DB.prepare(`
       SELECT
         order_id, product_name, quantity,
-        unit_price, line_total
+        unit_price, line_total, station, kitchen_status
       FROM order_items
       WHERE order_id IN (${placeholders})
       ORDER BY rowid ASC
@@ -572,11 +620,33 @@ app.patch('/api/admin/orders/:id/status', async (c) => {
     // expected_status 避免兩名店員同時修改時覆蓋對方結果
     const updated = await c.env.DB.prepare(`
       UPDATE orders
-      SET status = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND status = ?
-      RETURNING id, order_number, status, updated_at
+      SET
+        status = ?,
+        updated_at = CURRENT_TIMESTAMP
+
+      WHERE id = ?
+        AND status = ?
+
+        -- 只有完成訂單需要檢查廚房狀態
+        -- 取消訂單不受熟食製作進度限制
+        AND (
+          ? = 'cancelled'
+          OR NOT EXISTS (
+            SELECT 1
+            FROM order_items i
+            WHERE i.order_id = orders.id
+              AND i.station = 'kitchen'
+              AND i.kitchen_status <> 'ready'
+          )
+        )
+
+      RETURNING
+        id,
+        order_number,
+        status,
+        updated_at
     `)
-      .bind(to, orderId, from)
+      .bind(to, orderId, from, to)
       .first<{
         id: string;
         order_number: string;
@@ -609,6 +679,171 @@ app.patch('/api/admin/orders/:id/status', async (c) => {
     );
   }
 });
+
+
+type ChefOrderRow = {
+  order_id: string;
+  order_number: string;
+  dining_mode: 'dinein' | 'takeout';
+  table_id: string | null;
+  created_at: string;
+  item_id: string;
+  product_name: string;
+  quantity: number;
+  kitchen_status: 'pending' | 'preparing' | 'ready';
+};
+
+app.get('/api/chef/orders', async (c) => {
+  try {
+    const { results } = await c.env.DB.prepare(`
+      SELECT
+        o.id AS order_id,
+        o.order_number,
+        o.dining_mode,
+        o.table_id,
+        o.created_at,
+
+        i.id AS item_id,
+        i.product_name,
+        i.quantity,
+        i.kitchen_status
+
+      FROM order_items i
+      INNER JOIN orders o
+        ON o.id = i.order_id
+
+      WHERE i.station = 'kitchen'
+        AND o.status NOT IN ('cancelled', 'completed')
+        AND (
+          i.kitchen_status IN ('pending', 'preparing')
+          OR o.created_at >= datetime('now', '-1 day')
+        )
+
+      ORDER BY
+        o.created_at ASC,
+        i.rowid ASC
+
+      LIMIT 500
+    `).all<ChefOrderRow>();
+
+    c.header('Cache-Control', 'no-store');
+
+    return c.json({
+      success: true,
+      data: results,
+    });
+
+  } catch (error) {
+    console.error('Chef orders query failed:', error);
+
+    return c.json(
+      { success: false, error: 'Database error' },
+      500
+    );
+  }
+});
+
+
+type ChefStatus = 'pending' | 'preparing' | 'ready';
+
+app.patch('/api/chef/items/:id/status', async (c) => {
+  const itemId = c.req.param('id');
+
+  let body: unknown;
+
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json(
+      { success: false, error: 'Invalid JSON' },
+      400
+    );
+  }
+
+  if (
+    body === null ||
+    typeof body !== 'object' ||
+    Array.isArray(body)
+  ) {
+    return c.json(
+      { success: false, error: 'Invalid request' },
+      400
+    );
+  }
+
+  const request = body as Record<string, unknown>;
+
+  const nextStatus = request.status;
+  const expectedStatus = request.expected_status;
+
+  const validTransition =
+    nextStatus === 'ready' &&
+    (
+      expectedStatus === 'pending' ||
+      expectedStatus === 'preparing'
+    );
+  if (!validTransition) {
+    return c.json(
+      { success: false, error: 'Invalid status transition' },
+      400
+    );
+  }
+
+  try {
+    const updated = await c.env.DB.prepare(`
+      UPDATE order_items
+      SET
+        kitchen_status = 'ready',
+        kitchen_completed_at = CURRENT_TIMESTAMP
+
+      WHERE id = ?
+        AND station = 'kitchen'
+        AND kitchen_status = ?
+        AND EXISTS (
+          SELECT 1
+          FROM orders o
+          WHERE o.id = order_items.order_id
+            AND o.status NOT IN ('cancelled', 'completed')
+        )
+
+      RETURNING id, order_id, kitchen_status
+    `)
+      .bind(
+        itemId,
+        expectedStatus
+      )
+      .first<{
+        id: string;
+        order_id: string;
+        kitchen_status: ChefStatus;
+      }>();
+
+    if (!updated) {
+      return c.json(
+        {
+          success: false,
+          error: 'Item not found, order closed, or status changed',
+        },
+        409
+      );
+    }
+
+    return c.json({
+      success: true,
+      data: updated,
+    });
+
+  } catch (error) {
+    console.error('Failed to update kitchen status:', error);
+
+    return c.json(
+      { success: false, error: 'Database error' },
+      500
+    );
+  }
+});
+
+
 
 export default app;
 

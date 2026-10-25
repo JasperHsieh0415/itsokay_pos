@@ -16,6 +16,8 @@ type OrderItem = {
   quantity: number;
   unit_price: number;
   line_total: number;
+  station: 'kitchen' | 'bar' | 'none';
+  kitchen_status: 'not_required' | 'pending' | 'preparing' | 'ready';
 };
 
 type Order = {
@@ -38,16 +40,16 @@ const LABELS: Record<OrderStatus, string> = {
   cancelled: '已取消',
 };
 
-const NEXT: Partial<Record<
-  OrderStatus,
-  { status: OrderStatus; label: string }
->> = {
-  pending: { status: 'confirmed', label: '確認接單' },
-//   confirmed: { status: 'preparing', label: '開始製作' },
-//   preparing: { status: 'ready', label: '製作完成' },
-  confirmed: { status: 'ready', label: '製作完成' },
-  ready: { status: 'completed', label: '已交付餐點' },
-};
+// const NEXT: Partial<Record<
+//   OrderStatus,
+//   { status: OrderStatus; label: string }
+// >> = {
+//   pending: { status: 'confirmed', label: '確認接單' },
+// //   confirmed: { status: 'preparing', label: '開始製作' },
+// //   preparing: { status: 'ready', label: '製作完成' },
+//   confirmed: { status: 'ready', label: '製作完成' },
+//   ready: { status: 'completed', label: '已交付餐點' },
+// };
 
 function formatTime(value: string) {
   // D1 CURRENT_TIMESTAMP 預設為 UTC
@@ -230,14 +232,13 @@ export default function AdminOrders() {
 
   const activeOrders = orders.filter(
     (order) =>
-      order.status !== 'ready' &&
       order.status !== 'completed' &&
       order.status !== 'cancelled'
   );
 
   const completedOrders = orders.filter(
     (order) =>
-      (order.status === 'ready' || order.status === 'completed') &&
+      (order.status === 'completed') &&
       getOrderDay(order.created_at) === today
   );
 
@@ -296,7 +297,19 @@ export default function AdminOrders() {
             )}
 
             {activeOrders.map((order) => {
-              const next = NEXT[order.status];
+              // const next = NEXT[order.status];
+              const kitchenItems = order.items.filter(
+                (item) => item.station === 'kitchen'
+              );
+
+              const kitchenReadyCount = kitchenItems.filter(
+                (item) => item.kitchen_status === 'ready'
+              ).length;
+
+              const hasKitchenItems = kitchenItems.length > 0;
+
+              const kitchenComplete =
+                kitchenReadyCount === kitchenItems.length;
 
               return (
                 <article className="admin-order-card" key={order.id}>
@@ -309,12 +322,6 @@ export default function AdminOrders() {
                       </h3>
                       <small>#{order.order_number}</small>
                     </div>
-
-                    <span
-                      className={`admin-status status-${order.status}`}
-                    >
-                      {LABELS[order.status]}
-                    </span>
                   </div>
 
                   <p className="admin-order-time">
@@ -327,10 +334,25 @@ export default function AdminOrders() {
                         <span>
                           {item.product_name}
                           <b> × {item.quantity}</b>
+
+                          {item.station === 'kitchen' && (
+                            <small className={
+                              item.kitchen_status === 'ready'
+                                ? 'admin-item-ready'
+                                : 'admin-item-waiting'
+                            }>
+                              {item.kitchen_status === 'ready'
+                                ? ' ✓ 熟食完成'
+                                : ' · 等待廚房'}
+                            </small>
+                          )}
+
+                          {item.station === 'bar' && (
+                            <small> · 吧台處理</small>
+                          )}
                         </span>
-                        <span>
-                          NT${item.line_total}
-                        </span>
+
+                        <span>NT${item.line_total}</span>
                       </div>
                     ))}
                   </div>
@@ -342,35 +364,73 @@ export default function AdminOrders() {
                     </strong>
                   </div>
 
-                  <div className="admin-order-buttons">
-                    {next && (
-                      <button
-                        disabled={busyId !== null}
-                        onClick={() =>
-                          updateStatus(order, next.status)
-                        }
-                      >
-                        {busyId === order.id
-                          ? '更新中...'
-                          : next.label}
-                      </button>
-                    )}
+                  <div className={`admin-kitchen-progress ${
+                    kitchenComplete ? 'is-ready' : 'is-waiting'
+                  }`}>
+                    {hasKitchenItems ? (
+                      <>
+                        <div className="admin-kitchen-heading">
+                          <strong>廚房熟食進度</strong>
+                          <span>
+                            {kitchenReadyCount} / {kitchenItems.length}
+                          </span>
+                        </div>
 
-                    {(order.status === 'pending' ||
-                      order.status === 'confirmed') && (
-                      <button
-                        className="admin-cancel"
-                        disabled={busyId !== null}
-                        onClick={() => {
-                          if (window.confirm('確定取消這筆訂單？')) {
-                            updateStatus(order, 'cancelled');
-                          }
-                        }}
-                      >
-                        取消訂單
-                      </button>
+                        <div className="admin-kitchen-bar">
+                          <div
+                            className="admin-kitchen-bar-fill"
+                            style={{
+                              width: `${
+                                (kitchenReadyCount / kitchenItems.length) * 100
+                              }%`
+                            }}
+                          />
+                        </div>
+
+                        <p>
+                          {kitchenComplete
+                            ? '✓ 熟食已完成，等待櫃台確認出餐'
+                            : '⏳ 廚房尚未完成全部熟食'}
+                        </p>
+                      </>
+                    ) : (
+                      <p>此訂單不含熟食，可由櫃台直接處理</p>
                     )}
                   </div>
+
+
+                  <div className="admin-order-buttons">
+                    {/* 完成訂單：所有熟食完成後才允許 */}
+                    <button
+                      type="button"
+                      className="admin-complete"
+                      disabled={busyId !== null || !kitchenComplete}
+                      onClick={() => {
+                        updateStatus(order, 'completed');
+                      }}
+                    >
+                      {busyId === order.id ? '處理中...' : '完成訂單'}
+                    </button>
+
+                    {/* 取消訂單：不受熟食狀態限制 */}
+                    <button
+                      type="button"
+                      className="admin-cancel"
+                      disabled={busyId !== null}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `確定取消訂單 #${order.order_number}？`
+                          )
+                        ) {
+                          updateStatus(order, 'cancelled');
+                        }
+                      }}
+                    >
+                      {busyId === order.id ? '處理中...' : '取消訂單'}
+                    </button>
+                  </div>
+
                 </article>
               );
             })}
