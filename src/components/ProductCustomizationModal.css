@@ -202,3 +202,33 @@
     padding: 16px;
   }
 }
+
+.custom-product-english {
+  margin: 0 0 8px;
+  color: #806454;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.custom-english {
+  display: block;
+  margin-top: 3px;
+  color: #806454;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.custom-group-heading {
+  flex-wrap: wrap;
+}
+
+.custom-option > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.custom-option strong,
+.custom-option input {
+  flex-shrink: 0;
+}

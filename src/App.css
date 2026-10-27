@@ -316,10 +316,9 @@
 /* 分類標題 */
 .category-group-heading {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e5e5e5;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
 }
 
 .category-group-heading h2 {
@@ -329,15 +328,35 @@
   color: #252525;
 }
 
+/* 左側標題與副標題垂直排列 */
+.category-heading-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* 中文與英文標題水平排列 */
+.category-heading-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.category-heading-title h2 {
+  margin: 0;
+}
+
+
 .category-group-en {
   font-size: 16px;
   color: #888;
 }
 
+/* 右側商品數量 */
 .category-group-count {
-  margin-left: auto;
-  font-size: 13px;
-  color: #999;
+  flex-shrink: 0;
+  align-self: flex-start;
 }
 
 /* =========================================
@@ -584,3 +603,16 @@
   background: #62412f;
 }
 
+/* 套餐副標題 */
+.set-category-subtitle {
+  margin: 2px 0 8px;
+  color: #79543d;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+
+.set-category-subtitle-en {
+  color: #958578;
+  font-size: 16px;
+}

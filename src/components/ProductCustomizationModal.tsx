@@ -15,6 +15,7 @@ export type SelectedOption = {
 
 type ModalProduct = {
   product_code: string;
+  english_name?: string | null;
   name: string;
   price: number;
 };
@@ -143,12 +144,14 @@ function ProductCustomizationModal({
         <div className="custom-modal-header">
           <div>
             <h2 id="custom-modal-title">{product.name}</h2>
-            <span>{groups.length > 0 ? '客製化餐點' : '選擇數量'}</span>
+            {product.english_name && (
+              <p className="custom-product-english" lang="en">{product.english_name}</p>
+            )}
           </div>
           <button
             type="button"
             className="custom-modal-close"
-            aria-label="關閉"
+            aria-label="關閉 Close"
             onClick={onClose}
           >
             ×
@@ -157,7 +160,7 @@ function ProductCustomizationModal({
 
         <div className="custom-modal-body">
           <div className="custom-quantity-row">
-            <h3 id="custom-quantity-label">數量</h3>
+            <h3 id="custom-quantity-label">數量 <small lang="en">Quantity</small></h3>
             <div
               className="custom-quantity-control"
               role="group"
@@ -165,7 +168,7 @@ function ProductCustomizationModal({
             >
               <button
                 type="button"
-                aria-label="減少數量"
+                aria-label="減少數量 Decrease quantity"
                 disabled={quantity <= 1}
                 onClick={() => setQuantity((current) => Math.max(1, current - 1))}
               >
@@ -174,7 +177,7 @@ function ProductCustomizationModal({
               <output aria-live="polite">{quantity}</output>
               <button
                 type="button"
-                aria-label="增加數量"
+                aria-label="增加數量 Increase quantity"
                 onClick={() => setQuantity((current) => current + 1)}
               >
                 ＋
@@ -187,13 +190,13 @@ function ProductCustomizationModal({
               key={group.id}
             >
               <div className="custom-group-heading">
-                <h3>{group.name}</h3>
+                <h3>{group.name}<small className="custom-english" lang="en">{group.englishName}</small></h3>
                 <span>
-                  {group.required ? '必選' : '選填'}
+                  {group.required ? '必選 Required' : '選填 Optional'}
                   {' · '}
                   {group.selectionType === 'single'
-                    ? '單選'
-                    : `最多 ${group.maxSelect ?? group.options.length} 項`}
+                    ? '單選 Choose one'
+                    : `最多 ${group.maxSelect ?? group.options.length} 項 / Choose up to ${group.maxSelect ?? group.options.length}`}
                 </span>
               </div>
 
@@ -222,11 +225,11 @@ function ProductCustomizationModal({
                       }
                     />
 
-                    <span>{option.name}</span>
+                    <span>{option.name}<small className="custom-english" lang="en">{option.englishName}</small></span>
 
                     <strong>
                       {option.priceDelta === 0
-                        ? '免費'
+                        ? '免費 Free'
                         : `+ NT$ ${option.priceDelta}`}
                     </strong>
                   </label>
@@ -238,7 +241,7 @@ function ProductCustomizationModal({
 
         <div className="custom-modal-footer">
           <div className="custom-modal-total">
-            <span>合計金額</span>
+            <span>合計金額 Total</span>
             <strong>
               NT$ {(unitPrice * quantity).toLocaleString('zh-TW')}
             </strong>
@@ -251,7 +254,7 @@ function ProductCustomizationModal({
               onConfirm(selectedOptions, unitPrice, quantity)
             }
           >
-            加入訂單
+            加入訂單 Add to order
           </button>
         </div>
       </div>

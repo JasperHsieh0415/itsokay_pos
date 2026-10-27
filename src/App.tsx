@@ -584,6 +584,24 @@ const groupedProducts = useMemo(() => {
           </span>
         </div>
 
+        {currentCategory?.id === 1 && (
+          <div className="set-category-subtitle">
+            <div>附薯條及主廚沙拉;點飲品折抵30元</div>
+            <div className="set-category-subtitle-en">
+              Served with fries and chef&apos;s salad; Add a drink to your set for NT$30 off.
+            </div>
+          </div>
+        )}
+
+        {currentCategory?.id === 2 && (
+          <div className="set-category-subtitle">
+            <div>點飲品折抵30元</div>
+            <div className="set-category-subtitle-en">
+              Add a drink to your set for NT$30 off.
+            </div>
+          </div>
+        )}
+
         {loading && (
           <div className="message">菜單載入中...</div>
         )}
@@ -604,11 +622,34 @@ const groupedProducts = useMemo(() => {
               {groupedProducts.map(({ category, items }) => (
                 <section className="category-group" key={category.id}>
                   <div className="category-group-heading">
-                    <h2>{category.name}</h2>
+                    <div className="category-heading-content">
+                      <div className="category-heading-title">
+                        <h2>{category.name}</h2>
 
-                    <span className="category-group-en">
-                      {category.english_name}
-                    </span>
+                        <span className="category-group-en">
+                          {category.english_name}
+                        </span>
+                      </div>
+
+                      {category.id === 2 && (
+                        <div className="set-category-subtitle">
+                          <div>點飲品折抵30元</div>
+                          <div className="set-category-subtitle-en">
+                            Add a drink to your set for NT$30 off.
+                          </div>
+                        </div>
+                      )}
+
+                      {category.id === 1 && (
+                        <div className="set-category-subtitle">
+                          <div>附薯條及主廚沙拉;點飲品折抵30元</div>
+
+                          <div className="set-category-subtitle-en">
+                            Served with fries and chef&apos;s salad; Add a drink to your set for NT$30 off.
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     <span className="category-group-count">
                       {items.length} 項
