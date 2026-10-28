@@ -166,7 +166,7 @@ export const productOptions: Record<
     },
   ],
 
-  M0018: [
+  M018: [
     {
       id: 'burger-extra',
       name: '加購配料', englishName: 'Extra toppings',

@@ -13,6 +13,7 @@ type OrderStatus =
 type OrderItem = {
   order_id: string;
   product_name: string;
+  selected_options?: { option_name: string }[];
   quantity: number;
   unit_price: number;
   line_total: number;
@@ -29,15 +30,6 @@ type Order = {
   total_amount: number;
   created_at: string;
   items: OrderItem[];
-};
-
-const LABELS: Record<OrderStatus, string> = {
-  pending: '待確認',
-  confirmed: '已確認',
-//   preparing: '製作中',
-  ready: '可出餐',
-  completed: '已完成',
-  cancelled: '已取消',
 };
 
 // const NEXT: Partial<Record<
@@ -155,7 +147,8 @@ export default function AdminOrders() {
 
   const updateStatus = async (
     order: Order,
-    status: OrderStatus
+    status: OrderStatus,
+    force = false
   ) => {
     if (busyId) return;
 
@@ -174,6 +167,7 @@ export default function AdminOrders() {
           body: JSON.stringify({
             status,
             expected_status: order.status,
+            force,
           }),
         }
       );
@@ -242,7 +236,10 @@ export default function AdminOrders() {
       getOrderDay(order.created_at) === today
   );
 
-  const stats: OrderStatus[] = ['pending', 'confirmed'];
+  const stats = [
+    { label: '進行中', count: activeOrders.length },
+    { label: '已完成', count: completedOrders.length },
+  ];
 
   return (
     <main className="admin-page">
@@ -267,14 +264,10 @@ export default function AdminOrders() {
       </header>
 
       <section className="admin-stats">
-        {stats.map((status) => (
-          <div className="admin-stat" key={status}>
-            <span>{LABELS[status]}</span>
-            <strong>
-              {orders.filter(
-                (order) => order.status === status
-              ).length}
-            </strong>
+        {stats.map((stat) => (
+          <div className="admin-stat" key={stat.label}>
+            <span>{stat.label}</span>
+            <strong>{stat.count}</strong>
           </div>
         ))}
       </section>
@@ -334,6 +327,11 @@ export default function AdminOrders() {
                         <span>
                           {item.product_name}
                           <b> × {item.quantity}</b>
+                          {Boolean(item.selected_options?.length) && (
+                            <small className="admin-item-options">
+                              {item.selected_options?.map((option) => option.option_name).join('、')}
+                            </small>
+                          )}
 
                           {item.station === 'kitchen' && (
                             <small className={
@@ -412,6 +410,21 @@ export default function AdminOrders() {
                       {busyId === order.id ? '處理中...' : '完成訂單'}
                     </button>
 
+                    {!kitchenComplete && (
+                      <button
+                        type="button"
+                        className="admin-force-complete"
+                        disabled={busyId !== null}
+                        onClick={() => {
+                          if (window.confirm(`確定強制完成訂單 #${order.order_number}？尚未完成的熟食也會標記為完成，並從廚房待處理清單移除。`)) {
+                            updateStatus(order, 'completed', true);
+                          }
+                        }}
+                      >
+                        {busyId === order.id ? '處理中...' : '強制完成'}
+                      </button>
+                    )}
+
                     {/* 取消訂單：不受熟食狀態限制 */}
                     <button
                       type="button"
@@ -468,6 +481,9 @@ export default function AdminOrders() {
                         {order.items.map((item, index) => (
                           <div key={`${order.id}-${index}`}>
                             {item.product_name} × {item.quantity}
+                            {Boolean(item.selected_options?.length) && (
+                              <small>（{item.selected_options?.map((option) => option.option_name).join('、')}）</small>
+                            )}
                           </div>
                         ))}
                       </td>

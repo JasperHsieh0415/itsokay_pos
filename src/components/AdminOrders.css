@@ -22,12 +22,12 @@
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 26px;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
 .admin-header h1 {
-  font-size: 28px;
+  font-size: 24px;
   margin: 0 0 6px;
 }
 
@@ -39,41 +39,47 @@
 
 .admin-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
 .admin-actions button {
-  padding: 10px 16px;
+  min-height: 36px;
+  padding: 7px 12px;
   border: 1px solid #ded0c0;
   border-radius: 9px;
   background: #fff;
   color: #79543d;
+  font-size: 13px;
   cursor: pointer;
 }
 
 .admin-stats {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 30px;
+  grid-template-columns: repeat(2, minmax(0, 160px));
+  width: 100%;
+  max-width: 330px;
+  gap: 10px;
+  margin-bottom: 20px;
 }
 
 .admin-stat {
-  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
   border: 1px solid #e9dfd2;
-  border-radius: 14px;
+  border-radius: 10px;
   background: #fffdf9;
 }
 
 .admin-stat span {
-  display: block;
-  margin-bottom: 10px;
   font-size: 13px;
   color: #928170;
 }
 
 .admin-stat strong {
-  font-size: 32px;
+  font-size: 22px;
   color: #6a4530;
 }
 
@@ -92,14 +98,14 @@
   display: grid;
   grid-template-columns: repeat(
     auto-fill,
-    minmax(min(100%, 320px), 1fr)
+    minmax(min(100%, 380px), 1fr)
   );
   gap: 16px;
   align-items: start;
 }
 
 .admin-order-card {
-  padding: 20px;
+  padding: 22px;
   border: 1px solid #e9dfd2;
   border-radius: 14px;
   background: white;
@@ -114,13 +120,13 @@
 
 .admin-order-heading h3 {
   margin: 0 0 6px;
-  font-size: 22px;
+  font-size: 26px;
 }
 
 .admin-order-heading small,
 .admin-order-time {
   color: #958578;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .admin-status {
@@ -161,10 +167,40 @@
 
 .admin-order-items > div {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  margin: 9px 0;
-  font-size: 14px;
+  margin: 16px 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.admin-order-items > div > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-order-items > div > span:last-child {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-order-items b {
+  font-size: 22px;
+  white-space: nowrap;
+}
+
+.admin-order-items small {
+  display: block;
+  margin-top: 4px;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.admin-order-items .admin-item-options {
+  color: #79543d;
 }
 
 .admin-order-total {
@@ -172,10 +208,12 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 18px;
+  font-size: 18px;
+  gap: 12px;
 }
 
 .admin-order-total strong {
-  font-size: 21px;
+  font-size: 28px;
   color: #79543d;
 }
 
@@ -194,6 +232,7 @@
   background: #79543d;
   color: white;
   font-weight: 700;
+  font-size: 15px;
   cursor: pointer;
 }
 
@@ -389,7 +428,7 @@
   align-items: center;
   justify-content: space-between;
   margin-bottom: 10px;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .admin-kitchen-bar {
@@ -409,7 +448,7 @@
 
 .admin-kitchen-progress p {
   margin: 10px 0 0;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -432,6 +471,16 @@
 
 .admin-order-buttons .admin-complete:hover:not(:disabled) {
   background: #416a48;
+}
+
+.admin-order-buttons .admin-force-complete {
+  flex: 1;
+  background: #a76a24;
+  color: white;
+}
+
+.admin-order-buttons .admin-force-complete:hover:not(:disabled) {
+  background: #87531a;
 }
 
 /* 熟食尚未完成時，按鈕不可使用 */

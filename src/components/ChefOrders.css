@@ -21,66 +21,73 @@
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
 .chef-header h1 {
   margin: 0 0 6px;
-  font-size: 30px;
+  font-size: 24px;
 }
 
 .chef-header p {
   margin: 0;
   color: #948273;
+  font-size: 13px;
 }
 
 .chef-header-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
 .chef-header-actions button,
 .chef-filters button {
-  padding: 12px 18px;
+  min-height: 36px;
+  padding: 7px 12px;
   border: 1px solid #d9c8b6;
   border-radius: 10px;
   background: white;
   color: #79543d;
   font-weight: 700;
+  font-size: 13px;
   cursor: pointer;
 }
 
 .chef-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 24px;
+  width: 100%;
+  max-width: 600px;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .chef-stats > div {
-  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
   border: 1px solid #e6dbcc;
-  border-radius: 14px;
+  border-radius: 10px;
   background: white;
 }
 
 .chef-stats span {
-  display: block;
-  margin-bottom: 8px;
   color: #897868;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .chef-stats strong {
-  font-size: 36px;
+  font-size: 22px;
 }
 
 .chef-filters {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 .chef-filters button.active {
@@ -93,7 +100,7 @@
   display: grid;
   grid-template-columns: repeat(
     auto-fill,
-    minmax(min(100%, 340px), 1fr)
+    minmax(min(100%, 380px), 1fr)
   );
   gap: 18px;
   align-items: start;
@@ -115,6 +122,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 12px;
   padding-bottom: 16px;
   border-bottom: 1px solid #e8ded2;
 }
@@ -122,13 +130,22 @@
 .chef-ticket-header h2 {
   margin: 0 0 6px;
   color: #79543d;
-  font-size: 34px;
+  font-size: 36px;
 }
 
 .chef-ticket-header small,
 .chef-ticket-time {
   color: #958578;
-  font-size: 12px;
+  font-size: 14px;
+}
+
+.chef-ticket-header > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.chef-ticket-time {
+  flex-shrink: 0;
 }
 
 .chef-ticket-items {
@@ -149,14 +166,30 @@
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
-  font-size: 19px;
+  font-size: 24px;
   font-weight: 700;
+  line-height: 1.5;
+}
+
+.chef-item-title > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .chef-item-title strong {
   white-space: nowrap;
   color: #79543d;
-  font-size: 24px;
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.chef-item-options {
+  margin: 10px 0 0;
+  color: #79543d;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .chef-item-bottom {
@@ -169,7 +202,7 @@
 }
 
 .chef-item-status {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 700;
 }
 
@@ -192,7 +225,7 @@
   border-radius: 9px;
   background: #79543d;
   color: white;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   cursor: pointer;
 }
@@ -210,6 +243,7 @@
   color: #47754f;
   text-align: center;
   font-weight: 700;
+  font-size: 18px;
 }
 
 .chef-error {
@@ -277,18 +311,7 @@
   }
 
   .chef-stats {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
     gap: 8px;
-  }
-
-  .chef-stats > div {
-    padding: 12px;
-  }
-
-  .chef-stats span {
-    font-size: 11px;
-  }
-
-  .chef-stats strong {
-    font-size: 26px;
   }
 }

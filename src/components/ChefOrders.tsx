@@ -12,6 +12,7 @@ type ChefItem = {
   created_at: string;
   item_id: string;
   product_name: string;
+  selected_options?: { option_name: string }[];
   quantity: number;
   kitchen_status: ChefStatus;
 };
@@ -366,6 +367,9 @@ export default function ChefOrders() {
                         <strong>× {item.quantity}</strong>
                       </div>
 
+                      {Boolean(item.selected_options?.length) && (
+                        <p className="chef-item-options">{item.selected_options?.map((option) => option.option_name).join('、')}</p>
+                      )}
                       <div className="chef-item-bottom">
                         <span
                           className={`chef-item-status ${

@@ -285,12 +285,198 @@
   font-size: 12px;
 }
 
+.order-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.order-dining-info,
+.order-header,
+.order-footer {
+  flex-shrink: 0;
+}
+
+.order-error {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff0ec;
+  color: #a33625;
+  font-size: 13px;
+  line-height: 1.5;
+  max-height: 16vh;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
+.order-sidebar button:disabled {
+  cursor: not-allowed;
+}
+
+.order-sidebar button:disabled:not(.checkout-button) {
+  opacity: 0.5;
+}
+
+.order-sidebar button:focus-visible,
+.mobile-order-open:focus-visible {
+  outline: 3px solid #963f1c;
+  outline-offset: 3px;
+}
+
 /* Mobile */
 @media (max-width: 700px) {
-  .order-sidebar {
-    position: static;
+  .mobile-order-bar {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: #fffaf5;
+    border-top: 1px solid #e6d8cc;
+    box-shadow: 0 -4px 24px rgba(80, 50, 30, 0.1);
+  }
+
+  .mobile-order-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .mobile-order-label {
+    color: #8c7d72;
+    font-size: 13px;
+  }
+
+  .mobile-order-summary strong {
+    color: #70452f;
+    font-size: 22px;
+    overflow-wrap: anywhere;
+  }
+
+  .mobile-order-open {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-shrink: 0;
+    min-height: 48px;
+    padding: 12px 18px;
+    border: none;
+    border-radius: 12px;
+    background: #70452f;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .mobile-order-open:hover {
+    background: #5b3523;
+  }
+
+  .mobile-order-dialog {
+    position: fixed;
+    inset: auto 0 0;
+    box-sizing: border-box;
     width: 100%;
-    height: 420px;
+    max-width: 100%;
+    height: 88vh;
+    height: 88dvh;
+    max-height: 100%;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 22px 22px 0 0;
+    background: #fff;
+    color: #2d2926;
+    overflow: hidden;
+  }
+
+  .mobile-order-dialog::backdrop {
+    background: rgba(45, 29, 20, 0.48);
+  }
+
+  .mobile-order-dialog[open] {
+    animation: order-sheet-enter 180ms ease-out;
+  }
+
+  .mobile-order-dialog .order-sidebar {
+    position: static;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
     min-height: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .order-header {
+    padding: 14px 16px;
+  }
+
+  .order-sheet-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 50%;
+    background: #f7eee5;
+    color: #70452f;
+    font-size: 28px;
+    cursor: pointer;
+  }
+
+  .order-dining-info {
+    padding: 10px 16px;
+  }
+
+  .order-body {
+    padding: 16px;
+    overscroll-behavior: contain;
+  }
+
+  .order-item-remove,
+  .quantity-control button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .order-item-info h3 {
+    overflow-wrap: anywhere;
+  }
+
+  .order-footer {
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .order-subtotal {
+    display: none;
+  }
+
+  .order-total {
+    margin-bottom: 12px;
+  }
+
+  .clear-order-button {
+    min-height: 44px;
+    margin-top: 4px;
+  }
+}
+
+@keyframes order-sheet-enter {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-order-dialog[open] {
+    animation: none;
   }
 }

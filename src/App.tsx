@@ -362,19 +362,6 @@ const groupedProducts = useMemo(() => {
       return;
     }
 
-    // 目前後端尚未實作客製化選項計價。
-    // 不可忽略客製化資訊直接送出原價訂單。
-    const hasCustomization = cartItems.some(
-      (item) => (item.selectedOptions?.length ?? 0) > 0
-    );
-
-    if (hasCustomization) {
-      setOrderError(
-        '目前尚未支援客製化餐點送單，請先完成後端客製化選項計價'
-      );
-      return;
-    }
-
     setSubmittingOrder(true);
     setOrderError(null);
     setCreatedOrderNumber(null);
@@ -394,6 +381,10 @@ const groupedProducts = useMemo(() => {
           items: cartItems.map((item) => ({
             product_code: item.productCode,
             quantity: item.quantity,
+            selected_options: (item.selectedOptions ?? []).map((option) => ({
+              group_id: option.groupId,
+              option_id: option.optionId,
+            })),
           })),
         }),
       });
@@ -489,8 +480,6 @@ const groupedProducts = useMemo(() => {
           <span className="brand-english">It's okay</span>
           <span className="brand-chinese">沒事咖啡</span>
           <span className="brand-divider" />
-          <span className="brand-pos">POS</span>
-          <span className="version">v0.2</span>
         </div>
 
         <div className="header-controls">
@@ -579,9 +568,6 @@ const groupedProducts = useMemo(() => {
           <span className="menu-heading-en">
             {currentCategory?.english_name ?? 'All'}
           </span>
-          <span className="menu-count">
-            （共 {filteredProducts.length} 項）
-          </span>
         </div>
 
         {currentCategory?.id === 1 && (
@@ -650,10 +636,6 @@ const groupedProducts = useMemo(() => {
                         </div>
                       )}
                     </div>
-
-                    <span className="category-group-count">
-                      {items.length} 項
-                    </span>
                   </div>
 
                   <div className="product-grid">
@@ -683,11 +665,6 @@ const groupedProducts = useMemo(() => {
           )
         )}
       </main>
-      {orderError && (
-        <div role="alert" className="message error">
-          {orderError}
-        </div>
-      )}
 
       <OrderSidebar
         items={cartItems}
@@ -695,6 +672,8 @@ const groupedProducts = useMemo(() => {
         onQuantityChange={handleQuantityChange}
         onClear={handleClearOrder}
         onCheckout={handleCheckout}
+        submitting={submittingOrder}
+        error={orderError}
         tableId={selectedTableId}
       />
     </div>

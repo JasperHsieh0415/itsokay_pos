@@ -654,6 +654,23 @@
 
   .cafe-floor-plan {
     aspect-ratio: 440 / 680;
+    min-height: 560px;
+  }
+
+  .cafe-table-button.cafe-table-diamond {
+    width: 38%;
+  }
+
+  .cafe-table-button.cafe-table-square {
+    width: 38%;
+    height: 14%;
+    min-height: 76px;
+  }
+
+  .cafe-table-label {
+    min-width: 48px;
+    height: 36px;
+    font-size: 18px;
   }
 
   .cafe-selection-card {
@@ -707,16 +724,141 @@
     font-size: 17px;
   }
 
-  .cafe-table-button {
-    width: 25%;
-  }
-
   .cafe-selection-panel {
     padding: 18px;
   }
 
   .cafe-floor-legend {
     font-size: 11px;
+  }
+}
+
+/* Keep seat confirmation within reach, matching the mobile order summary. */
+@media (max-width: 700px) {
+  .cafe-seat-page {
+    padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .cafe-mobile-seat-bar {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--cafe-line);
+    background: #fffaf5;
+    box-shadow: 0 -4px 24px rgba(80, 50, 30, 0.1);
+  }
+
+  .cafe-mobile-seat-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .cafe-mobile-seat-summary span {
+    color: var(--cafe-muted);
+    font-size: 13px;
+  }
+
+  .cafe-mobile-seat-summary strong {
+    color: var(--cafe-brown);
+    font-size: 22px;
+  }
+
+  .cafe-mobile-seat-open {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-shrink: 0;
+    min-height: 48px;
+    padding: 12px 18px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--cafe-brown);
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .cafe-mobile-seat-open:disabled {
+    background: #d7c8b7;
+    cursor: not-allowed;
+  }
+
+  .cafe-seat-dialog {
+    position: fixed;
+    inset: auto 0 0;
+    width: 100%;
+    max-width: 100%;
+    max-height: 90vh;
+    max-height: 90dvh;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 22px 22px 0 0;
+    background: var(--cafe-paper);
+    color: var(--cafe-ink);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .cafe-seat-dialog::backdrop {
+    background: rgba(45, 29, 20, 0.48);
+  }
+
+  .cafe-seat-dialog .cafe-selection-panel {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    max-height: 90dvh;
+    margin: 0 auto;
+    padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+    border: 0;
+    background: transparent;
+  }
+
+  .cafe-seat-dialog .cafe-panel-heading {
+    position: relative;
+    padding-right: 48px;
+  }
+
+  .cafe-sheet-close {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid var(--cafe-line);
+    border-radius: 50%;
+    background: white;
+    color: var(--cafe-brown);
+    font-size: 26px;
+    cursor: pointer;
+  }
+
+  .cafe-seat-dialog .cafe-selection-card {
+    min-height: 0;
+    margin: 16px 0;
+    padding: 16px;
+    overflow-y: auto;
+  }
+
+  .cafe-mobile-seat-open:focus-visible,
+  .cafe-sheet-close:focus-visible,
+  .cafe-seat-dialog .cafe-confirm-button:focus-visible {
+    outline: 3px solid var(--cafe-brown);
+    outline-offset: 3px;
   }
 }
 

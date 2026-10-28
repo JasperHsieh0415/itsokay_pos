@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './TableSelection.css';
 
 type TableShape = 'diamond' | 'square';
@@ -138,6 +138,35 @@ export default function TableSelection({
   onConfirm,
   onBack,
 }: Props) {
+  const [isMobile, setIsMobile] = useState(
+    () => window.matchMedia('(max-width: 700px)').matches
+  );
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 700px)');
+    const handleChange = () => {
+      setIsMobile(media.matches);
+      setMobileOpen(false);
+    };
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobile || !mobileOpen) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previousOverflow = document.body.style.overflow;
+    dialog.showModal();
+    document.body.style.overflow = 'hidden';
+    return () => {
+      dialog.close();
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMobile, mobileOpen]);
+
   const [selectedTableId, setSelectedTableId] =
     useState<string | null>(
       TABLES.some((table) => table.id === initialTableId)
@@ -147,6 +176,60 @@ export default function TableSelection({
 
   const selectedTable =
     TABLES.find((table) => table.id === selectedTableId) ?? null;
+
+  const selectionPanel = (
+    <aside className="cafe-selection-panel" aria-labelledby="cafe-confirm-title">
+      <div className="cafe-panel-heading">
+        <span className="cafe-eyebrow">YOUR TABLE</span>
+        <h2 id="cafe-confirm-title">確認桌位</h2>
+        <p>選擇完成後，即可開始點餐。</p>
+        {isMobile && (
+          <button
+            type="button"
+            className="cafe-sheet-close"
+            aria-label="關閉確認桌位，繼續選位"
+            autoFocus
+            onClick={() => setMobileOpen(false)}
+          >×</button>
+        )}
+      </div>
+      <div
+        className={`cafe-selection-card ${selectedTable ? 'has-selection' : ''}`}
+        aria-live="polite"
+      >
+        {selectedTable ? (
+          <>
+            <span className="cafe-selected-label">SELECTED TABLE</span>
+            <strong className="cafe-selected-number">{selectedTable.id}</strong>
+            <span className="cafe-selected-name">{selectedTable.name}</span>
+            <span className="cafe-selected-check">✓ 已選取</span>
+          </>
+        ) : (
+          <>
+            <span className="cafe-selected-label">YOUR SEAT</span>
+            <span className="cafe-empty-icon">◇</span>
+            <strong className="cafe-empty-title">尚未選擇桌位</strong>
+            <span className="cafe-empty-description">點擊平面圖中的桌子</span>
+          </>
+        )}
+      </div>
+      <button
+        type="button"
+        className="cafe-confirm-button"
+        disabled={!selectedTableId}
+        onClick={() => {
+          if (selectedTableId) onConfirm(selectedTableId);
+        }}
+      >
+        <span>確認桌位，開始點餐</span>
+        <span aria-hidden="true">→</span>
+      </button>
+      <div className="cafe-selection-notice">
+        <span aria-hidden="true">ⓘ</span>
+        <p>請確認所選位置與實際座位相符，方便店員將餐點送到你的桌上。</p>
+      </div>
+    </aside>
+  );
 
   return (
     <div className="cafe-seat-page">
@@ -198,10 +281,6 @@ export default function TableSelection({
                 </span>
                 <h2>店內座位配置</h2>
               </div>
-
-              <span className="cafe-table-count">
-                08 TABLES
-              </span>
             </div>
 
             <div className="cafe-floor-plan">
@@ -276,95 +355,50 @@ export default function TableSelection({
                 <i className="cafe-legend-dot" />
                 已選取的桌位
               </span>
-
-              <span>共 {TABLES.length} 張桌子</span>
             </div>
           </section>
 
           {/* Confirmation panel */}
-          <aside className="cafe-selection-panel">
-            <div className="cafe-panel-heading">
-              <span className="cafe-eyebrow">
-                YOUR TABLE
-              </span>
-              <h2>確認桌位</h2>
-              <p>選擇完成後，即可開始點餐。</p>
-            </div>
-
-            <div
-              className={[
-                'cafe-selection-card',
-                selectedTable ? 'has-selection' : '',
-              ].join(' ')}
-              aria-live="polite"
-            >
-              {selectedTable ? (
-                <>
-                  <span className="cafe-selected-label">
-                    SELECTED TABLE
-                  </span>
-
-                  <strong className="cafe-selected-number">
-                    {selectedTable.id}
-                  </strong>
-
-                  <span className="cafe-selected-name">
-                    {selectedTable.name}
-                  </span>
-
-                  <span className="cafe-selected-check">
-                    ✓ 已選取
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="cafe-selected-label">
-                    YOUR SEAT
-                  </span>
-
-                  <span className="cafe-empty-icon">
-                    ◇
-                  </span>
-
-                  <strong className="cafe-empty-title">
-                    尚未選擇桌位
-                  </strong>
-
-                  <span className="cafe-empty-description">
-                    點擊左側平面圖中的桌子
-                  </span>
-                </>
-              )}
-            </div>
-
-            <button
-              type="button"
-              className="cafe-confirm-button"
-              disabled={!selectedTableId}
-              onClick={() => {
-                if (selectedTableId) {
-                  onConfirm(selectedTableId);
-                }
-              }}
-            >
-              <span>確認桌位，開始點餐</span>
-              <span aria-hidden="true">→</span>
-            </button>
-
-            <div className="cafe-selection-notice">
-              <span aria-hidden="true">ⓘ</span>
-              <p>
-                請確認所選位置與實際座位相符，
-                方便店員將餐點送到你的桌上。
-              </p>
-            </div>
-          </aside>
+          {!isMobile && selectionPanel}
         </div>
 
         <footer className="cafe-seat-footer">
           IT'S OKAY TO TAKE YOUR TIME.
         </footer>
       </div>
+      {isMobile && (
+        <>
+          <div className="cafe-mobile-seat-bar">
+            <div className="cafe-mobile-seat-summary" aria-live="polite" aria-atomic="true">
+              <span>{selectedTable ? '已選桌位' : '請先選擇桌位'}</span>
+              <strong>{selectedTable?.id ?? '尚未選擇'}</strong>
+            </div>
+            <button
+              type="button"
+              className="cafe-mobile-seat-open"
+              disabled={!selectedTable}
+              aria-haspopup="dialog"
+              aria-expanded={mobileOpen}
+              aria-controls="cafe-seat-dialog"
+              onClick={() => setMobileOpen(true)}
+            >
+              確認桌位 <span aria-hidden="true">⌃</span>
+            </button>
+          </div>
+          <dialog
+            ref={dialogRef}
+            id="cafe-seat-dialog"
+            className="cafe-seat-dialog"
+            aria-labelledby="cafe-confirm-title"
+            onClose={() => setMobileOpen(false)}
+            onClick={(event) => {
+              if (event.target === event.currentTarget) setMobileOpen(false);
+            }}
+          >
+            {selectionPanel}
+          </dialog>
+        </>
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 
 import { Hono } from 'hono';
+import { resolveOrderOptions, type OrderOption } from './orderOptions.ts';
 
 type Bindings = {
   DB: D1Database;
@@ -101,6 +102,7 @@ app.get('/api/categories', async (c) => {
 type CreateOrderItem = {
   product_code: string;
   quantity: number;
+  selected_options?: unknown;
 };
 
 type CreateOrderRequest = {
@@ -209,9 +211,8 @@ app.post('/api/orders', async (c) => {
 
     const itemRecord = item as unknown as Record<string, unknown>;
 
-    // 本階段只允許一般商品。
-    // 拒絕額外欄位，以免客製化選項被忽略。
-    const allowedKeys = ['product_code', 'quantity'];
+    // 僅接受選項識別碼；名稱與價格由後端決定。
+    const allowedKeys = ['product_code', 'quantity', 'selected_options'];
 
     if (
       Object.keys(itemRecord).some(
@@ -234,22 +235,12 @@ app.post('/api/orders', async (c) => {
   if (!validItems) {
     return c.json({
       success: false,
-      error: 'Invalid item data or unsupported customization',
+      error: 'Invalid item data',
     }, 400);
   }
 
-  // 同一個 product_code 目前只能有一筆。
-  // 後續支援不同客製化組合時再放寬。
-  const productCodes = items.map(
-    (item) => item.product_code
-  );
-
-  if (new Set(productCodes).size !== productCodes.length) {
-    return c.json({
-      success: false,
-      error: 'Duplicate product codes',
-    }, 400);
-  }
+  // 不同客製化組合保留各自的訂單明細。
+  const productCodes = [...new Set(items.map((item) => item.product_code))];
 
   try {
     // 4. 一次取得所有商品目前售價
@@ -297,7 +288,20 @@ app.post('/api/orders', async (c) => {
         }, 400);
       }
 
-      const lineTotal = product.price * item.quantity;
+      let options: OrderOption[];
+      try {
+        options = resolveOrderOptions(item.product_code, item.selected_options);
+      } catch (error) {
+        return c.json({
+          success: false,
+          error: error instanceof Error ? error.message : 'Invalid customization',
+        }, 400);
+      }
+      const unitPrice = product.price + options.reduce((sum, option) => sum + option.price_delta, 0);
+      if (!Number.isSafeInteger(unitPrice) || unitPrice < 0) {
+        return c.json({ success: false, error: 'Invalid calculated amount' }, 400);
+      }
+      const lineTotal = unitPrice * item.quantity;
 
       if (!Number.isSafeInteger(lineTotal)) {
         return c.json({
@@ -313,7 +317,8 @@ app.post('/api/orders', async (c) => {
         productCode: product.product_code,
         productName: product.name,
         quantity: item.quantity,
-        unitPrice: product.price,
+        unitPrice,
+        options,
         lineTotal,
 
         station: product.station,
@@ -390,6 +395,19 @@ app.post('/api/orders', async (c) => {
       ),
     ];
 
+    for (const item of orderItems) {
+      for (const option of item.options) {
+        statements.push(c.env.DB.prepare(`
+          INSERT INTO order_item_options (
+            id, order_item_id, group_id, option_id, option_name, price_delta
+          ) VALUES (?, ?, ?, ?, ?, ?)
+        `).bind(
+          crypto.randomUUID(), item.id, option.group_id,
+          option.option_id, option.option_name, option.price_delta
+        ));
+      }
+    }
+
     await c.env.DB.batch(statements);
 
     return c.json({
@@ -415,6 +433,27 @@ app.post('/api/orders', async (c) => {
 });
 
 
+async function loadOrderOptions(db: D1Database, orderIds: string[]) {
+  const optionsByItem = new Map<string, OrderOption[]>();
+  const uniqueIds = [...new Set(orderIds)];
+  for (let offset = 0; offset < uniqueIds.length; offset += 50) {
+    const ids = uniqueIds.slice(offset, offset + 50);
+    const { results } = await db.prepare(`
+      SELECT opt.order_item_id, opt.group_id, opt.option_id, opt.option_name, opt.price_delta
+      FROM order_item_options opt
+      JOIN order_items item ON item.id = opt.order_item_id
+      WHERE item.order_id IN (${ids.map(() => '?').join(',')})
+      ORDER BY opt.rowid ASC
+    `).bind(...ids).all<OrderOption & { order_item_id: string }>();
+    for (const { order_item_id, ...option } of results) {
+      const options = optionsByItem.get(order_item_id) ?? [];
+      options.push(option);
+      optionsByItem.set(order_item_id, options);
+    }
+  }
+  return optionsByItem;
+}
+
 type OrderRow = {
   id: string;
   order_number: string;
@@ -426,6 +465,7 @@ type OrderRow = {
 };
 
 type OrderItemRow = {
+  id: string;
   order_id: string;
   product_name: string;
   quantity: number;
@@ -521,7 +561,7 @@ app.get('/api/admin/orders', async (c) => {
 
     const itemResult = await c.env.DB.prepare(`
       SELECT
-        order_id, product_name, quantity,
+        id, order_id, product_name, quantity,
         unit_price, line_total, station, kitchen_status
       FROM order_items
       WHERE order_id IN (${placeholders})
@@ -530,11 +570,12 @@ app.get('/api/admin/orders', async (c) => {
       .bind(...orders.map((order) => order.id))
       .all<OrderItemRow>();
 
-    const itemsByOrder = new Map<string, OrderItemRow[]>();
+    const optionsByItem = await loadOrderOptions(c.env.DB, orders.map((order) => order.id));
+    const itemsByOrder = new Map<string, (OrderItemRow & { selected_options: OrderOption[] })[]>();
 
     for (const item of itemResult.results) {
       const existing = itemsByOrder.get(item.order_id) ?? [];
-      existing.push(item);
+      existing.push({ ...item, selected_options: optionsByItem.get(item.id) ?? [] });
       itemsByOrder.set(item.order_id, existing);
     }
 
@@ -588,6 +629,12 @@ app.patch('/api/admin/orders/:id/status', async (c) => {
   const request = body as Record<string, unknown>;
   const newStatus = request.status;
   const expectedStatus = request.expected_status;
+  const force = request.force === true;
+
+  if ((request.force !== undefined && typeof request.force !== 'boolean') ||
+      (force && newStatus !== 'completed')) {
+    return c.json({ success: false, error: 'Invalid force completion request' }, 400);
+  }
 
   const statuses: OrderStatus[] = [
     'pending', 'confirmed', 'preparing',
@@ -618,7 +665,7 @@ app.patch('/api/admin/orders/:id/status', async (c) => {
 
   try {
     // expected_status 避免兩名店員同時修改時覆蓋對方結果
-    const updated = await c.env.DB.prepare(`
+    const updateOrder = c.env.DB.prepare(`
       UPDATE orders
       SET
         status = ?,
@@ -631,6 +678,7 @@ app.patch('/api/admin/orders/:id/status', async (c) => {
         -- 取消訂單不受熟食製作進度限制
         AND (
           ? = 'cancelled'
+          OR ? = 1
           OR NOT EXISTS (
             SELECT 1
             FROM order_items i
@@ -646,13 +694,37 @@ app.patch('/api/admin/orders/:id/status', async (c) => {
         status,
         updated_at
     `)
-      .bind(to, orderId, from, to)
-      .first<{
-        id: string;
-        order_number: string;
-        status: OrderStatus;
-        updated_at: string;
-      }>();
+      .bind(to, orderId, from, to, force ? 1 : 0);
+
+    type UpdatedOrder = {
+      id: string;
+      order_number: string;
+      status: OrderStatus;
+      updated_at: string;
+    };
+
+    let updated: UpdatedOrder | null;
+    if (force) {
+      // 同一交易內同步熟食與訂單；狀態已改變時，兩者都不更新。
+      const results = await c.env.DB.batch<UpdatedOrder>([
+        c.env.DB.prepare(`
+          UPDATE order_items
+          SET kitchen_status = 'ready',
+              kitchen_completed_at = CURRENT_TIMESTAMP
+          WHERE order_id = ?
+            AND station = 'kitchen'
+            AND kitchen_status <> 'ready'
+            AND EXISTS (
+              SELECT 1 FROM orders o
+              WHERE o.id = order_items.order_id AND o.status = ?
+            )
+        `).bind(orderId, from),
+        updateOrder,
+      ]);
+      updated = results[1].results[0] ?? null;
+    } else {
+      updated = await updateOrder.first<UpdatedOrder>();
+    }
 
     if (!updated) {
       return c.json(
@@ -726,11 +798,15 @@ app.get('/api/chef/orders', async (c) => {
       LIMIT 500
     `).all<ChefOrderRow>();
 
+    const optionsByItem = await loadOrderOptions(c.env.DB, results.map((item) => item.order_id));
     c.header('Cache-Control', 'no-store');
 
     return c.json({
       success: true,
-      data: results,
+      data: results.map((item) => ({
+        ...item,
+        selected_options: optionsByItem.get(item.item_id) ?? [],
+      })),
     });
 
   } catch (error) {
