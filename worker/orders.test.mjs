@@ -95,6 +95,39 @@ test('plain items, free required choices and M018 customization succeed', async 
   assert.equal((await response.json()).data.total_amount, 645);
 });
 
+test('meal drink discounts persist with custom prices and staff totals use the saved amounts', async (t) => {
+  const { post, get, sqlite } = setup(t);
+  const response = await post([
+    { product_code: 'M005', quantity: 2, selected_options: [option('cheese')] },
+    { product_code: 'M009', quantity: 1, selected_options: [option('bread', 'starch')] },
+    { product_code: 'M036', quantity: 2, selected_options: [option('Hot', 'temp')] },
+  ]);
+  assert.equal(response.status, 201);
+  const created = (await response.json()).data;
+  assert.equal(created.subtotal_amount, 1080);
+  assert.equal(created.discount_amount, 60);
+  assert.equal(created.total_amount, 1020);
+  assert.equal(sqlite.prepare('SELECT total_amount FROM orders').get().total_amount, 1020);
+  assert.deepEqual(sqlite.prepare('SELECT line_total FROM order_items ORDER BY rowid').all().map((row) => row.line_total), [630, 250, 200]);
+  sqlite.exec('UPDATE products SET price = price + 100');
+  const saved = (await (await get('admin')).json()).data[0];
+  assert.equal(saved.subtotal_amount, 1080);
+  assert.equal(saved.discount_amount, 60);
+  assert.equal(saved.total_amount, 1020);
+});
+
+test('drinks without qualifying meals do not receive a discount', async (t) => {
+  const { post } = setup(t);
+  const response = await post([
+    { product_code: 'M018', quantity: 2 },
+    { product_code: 'M036', quantity: 3, selected_options: [option('Hot', 'temp')] },
+  ]);
+  assert.equal(response.status, 201);
+  const created = (await response.json()).data;
+  assert.equal(created.discount_amount, 0);
+  assert.equal(created.total_amount, 760);
+});
+
 test('invalid, duplicate, missing, multiple single-choice and forged-price options reject without writes', async (t) => {
   const { post, sqlite } = setup(t);
   const invalidItems = [

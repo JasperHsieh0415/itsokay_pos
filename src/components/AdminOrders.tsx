@@ -28,6 +28,7 @@ type Order = {
   table_id: string | null;
   status: OrderStatus;
   total_amount: number;
+  discount_amount?: number;
   created_at: string;
   items: OrderItem[];
 };
@@ -355,6 +356,11 @@ export default function AdminOrders() {
                     ))}
                   </div>
 
+                  {(order.discount_amount ?? 0) > 0 && (
+                    <p className="admin-order-discount">
+                      餐點搭飲品優惠 − NT${order.discount_amount?.toLocaleString()}
+                    </p>
+                  )}
                   <div className="admin-order-total">
                     <span>總金額</span>
                     <strong>
@@ -486,6 +492,11 @@ export default function AdminOrders() {
                             )}
                           </div>
                         ))}
+                        {(order.discount_amount ?? 0) > 0 && (
+                          <div className="admin-order-discount">
+                            餐點搭飲品優惠 − NT${order.discount_amount?.toLocaleString()}
+                          </div>
+                        )}
                       </td>
                       <td>NT${order.total_amount.toLocaleString()}</td>
                     </tr>

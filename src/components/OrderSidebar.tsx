@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import './OrderSidebar.css';
 import type { SelectedOption } from './ProductCustomizationModal';
+import { calculateMealDrinkDiscount } from '../data/orderDiscount';
 
 export type CartItem = {
   cartId: string;
@@ -71,6 +72,9 @@ function OrderSidebar({
     (sum, item) => sum + item.price * item.quantity,
     0
   );
+
+  const { pairCount, discountAmount } = calculateMealDrinkDiscount(items);
+  const total = subtotal - discountAmount;
 
   const orderContent = (
     <aside className="order-sidebar" aria-labelledby="order-summary-title">
@@ -212,10 +216,17 @@ function OrderSidebar({
           <span>NT$ {subtotal.toLocaleString('zh-TW')}</span>
         </div>
 
+        {discountAmount > 0 && (
+          <div className="order-subtotal order-discount">
+            <span>餐點搭飲品優惠（{pairCount} 組）</span>
+            <span>− NT$ {discountAmount.toLocaleString('zh-TW')}</span>
+          </div>
+        )}
+
         <div className="order-total">
           <span>合計</span>
           <strong>
-            NT$ {subtotal.toLocaleString('zh-TW')}
+            NT$ {total.toLocaleString('zh-TW')}
           </strong>
         </div>
 
@@ -249,7 +260,7 @@ function OrderSidebar({
       <div className="mobile-order-bar">
         <div className="mobile-order-summary" aria-live="polite" aria-atomic="true">
           <span className="mobile-order-label">目前訂單 · {totalQuantity} 件</span>
-          <strong>NT$ {subtotal.toLocaleString('zh-TW')}</strong>
+          <strong>NT$ {total.toLocaleString('zh-TW')}</strong>
         </div>
         <button
           type="button"

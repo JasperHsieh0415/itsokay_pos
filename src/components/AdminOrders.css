@@ -217,6 +217,12 @@
   color: #79543d;
 }
 
+.admin-order-discount {
+  color: #47764e;
+  font-size: 16px;
+  font-weight: 600;
+}
+
 .admin-order-buttons {
   display: flex;
   flex-wrap: wrap;

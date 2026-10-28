@@ -1,6 +1,7 @@
 
 import { Hono } from 'hono';
 import { resolveOrderOptions, type OrderOption } from './orderOptions.ts';
+import { calculateMealDrinkDiscount } from '../src/data/orderDiscount.ts';
 
 type Bindings = {
   DB: D1Database;
@@ -337,6 +338,13 @@ app.post('/api/orders', async (c) => {
       }, 400);
     }
 
+    const subtotalAmount = totalAmount;
+    const { discountAmount } = calculateMealDrinkDiscount(orderItems);
+    totalAmount -= discountAmount;
+    if (!Number.isSafeInteger(totalAmount) || totalAmount < 0) {
+      return c.json({ success: false, error: 'Invalid discounted amount' }, 400);
+    }
+
     // 5. 產生訂單識別碼
     const orderId = crypto.randomUUID();
 
@@ -419,6 +427,8 @@ app.post('/api/orders', async (c) => {
         table_id: diningMode === 'dinein' ? tableId : null,
         status: 'pending',
         total_amount: totalAmount,
+        subtotal_amount: subtotalAmount,
+        discount_amount: discountAmount,
       },
     }, 201);
 
@@ -579,10 +589,17 @@ app.get('/api/admin/orders', async (c) => {
       itemsByOrder.set(item.order_id, existing);
     }
 
-    const data = orders.map((order) => ({
-      ...order,
-      items: itemsByOrder.get(order.id) ?? [],
-    }));
+    const data = orders.map((order) => {
+      const orderItems = itemsByOrder.get(order.id) ?? [];
+      // 從下單時保存的原價明細與實收金額還原優惠，不以現在的菜單重新計價。
+      const subtotalAmount = orderItems.reduce((sum, item) => sum + item.line_total, 0);
+      return {
+        ...order,
+        subtotal_amount: subtotalAmount,
+        discount_amount: subtotalAmount - order.total_amount,
+        items: orderItems,
+      };
+    });
 
     c.header('Cache-Control', 'no-store');
 

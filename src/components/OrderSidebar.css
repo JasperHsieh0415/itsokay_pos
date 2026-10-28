@@ -233,6 +233,16 @@
   font-weight: 600;
 }
 
+.order-discount {
+  gap: 12px;
+  color: #47764e;
+  font-weight: 600;
+}
+
+.order-discount > span:last-child {
+  white-space: nowrap;
+}
+
 .order-total strong {
   font-size: 24px;
   color: #963f1c;
@@ -456,7 +466,7 @@
     padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
   }
 
-  .order-subtotal {
+  .order-subtotal:not(.order-discount) {
     display: none;
   }
 
