@@ -459,7 +459,12 @@
   }
 
   .order-item-info h3 {
+    font-size: 18px;
     overflow-wrap: anywhere;
+  }
+
+  .order-item-top strong {
+    font-size: 18px;
   }
 
   .order-footer {

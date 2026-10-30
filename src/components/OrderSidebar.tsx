@@ -129,7 +129,6 @@ function OrderSidebar({
                 <div className="order-item-top">
                   <div className="order-item-info">
                     <h3>{item.name}</h3>
-                    <small>{item.productCode}</small>
                     {item.selectedOptions.length > 0 && (
                     <div className="order-item-options">
                         {item.selectedOptions.map((option) => (
