@@ -27,6 +27,7 @@ app.get('/api/health', (c) => {
 });
 
 app.get('/api/menu', async (c) => {
+  c.header('Cache-Control', 'no-store');
   try {
     const { results } = await c.env.DB.prepare(`
       SELECT
@@ -34,7 +35,7 @@ app.get('/api/menu', async (c) => {
         p.product_code,
         p.name,
         p.english_name,
-        p.price,
+        CASE WHEN p.product_code IN ('M027', 'M047') THEN 0 ELSE p.price END AS price,
         p.sale_type,
         p.customization_tag,
         p.description,
@@ -298,7 +299,8 @@ app.post('/api/orders', async (c) => {
           error: error instanceof Error ? error.message : 'Invalid customization',
         }, 400);
       }
-      const unitPrice = product.price + options.reduce((sum, option) => sum + option.price_delta, 0);
+      const basePrice = ['M027', 'M047'].includes(product.product_code) ? 0 : product.price;
+      const unitPrice = basePrice + options.reduce((sum, option) => sum + option.price_delta, 0);
       if (!Number.isSafeInteger(unitPrice) || unitPrice < 0) {
         return c.json({ success: false, error: 'Invalid calculated amount' }, 400);
       }
@@ -476,6 +478,7 @@ type OrderRow = {
 
 type OrderItemRow = {
   id: string;
+  product_code: string;
   order_id: string;
   product_name: string;
   quantity: number;
@@ -548,6 +551,67 @@ app.use('/api/chef/*', async (c, next) => {
 });
 
 
+// 只修改這筆訂單中的時價明細，不變更菜單商品價格。
+app.patch('/api/admin/orders/:id/items/:itemId/price', async (c) => {
+  const orderId = c.req.param('id');
+  const itemId = c.req.param('itemId');
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ success: false, error: 'Invalid JSON body' }, 400);
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return c.json({ success: false, error: 'Invalid request body' }, 400);
+  }
+  const { unit_price: unitPrice, expected_unit_price: expectedPrice } = body as Record<string, unknown>;
+  if (typeof unitPrice !== 'number' || !Number.isSafeInteger(unitPrice) || unitPrice < 0 ||
+      typeof expectedPrice !== 'number' || !Number.isSafeInteger(expectedPrice) || expectedPrice < 0) {
+    return c.json({ success: false, error: '單價必須是 0 或正整數' }, 400);
+  }
+  try {
+    const item = await c.env.DB.prepare(`
+      SELECT quantity FROM order_items
+      WHERE id = ? AND order_id = ? AND product_code IN ('M027', 'M047')
+    `).bind(itemId, orderId).first<{ quantity: number }>();
+    if (!item) return c.json({ success: false, error: '找不到可修改價格的訂單明細' }, 404);
+    const lineTotal = unitPrice * item.quantity;
+    const delta = (unitPrice - expectedPrice) * item.quantity;
+    if (!Number.isSafeInteger(lineTotal) || !Number.isSafeInteger(delta)) {
+      return c.json({ success: false, error: '金額超出可支援範圍' }, 400);
+    }
+    // D1 batch 在同一交易依序執行。以差額更新總額，保留既有優惠，
+    // 並在寫入當下檢查訂單狀態、舊單價，避免並行修改造成覆蓋。
+    const results = await c.env.DB.batch([
+      c.env.DB.prepare(`
+        UPDATE orders SET total_amount = total_amount + ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND status NOT IN ('completed', 'cancelled')
+          AND total_amount + ? BETWEEN 0 AND 9007199254740991
+          AND (SELECT SUM(line_total) FROM order_items WHERE order_id = ?) + ?
+              BETWEEN 0 AND 9007199254740991
+          AND EXISTS (
+            SELECT 1 FROM order_items WHERE id = ? AND order_id = orders.id
+              AND product_code IN ('M027', 'M047') AND unit_price = ? AND quantity = ?
+          )
+        RETURNING id, total_amount
+      `).bind(delta, orderId, delta, orderId, delta, itemId, expectedPrice, item.quantity),
+      c.env.DB.prepare(`
+        UPDATE order_items SET unit_price = ?, line_total = ?
+        WHERE id = ? AND order_id = ? AND changes() = 1
+        RETURNING id, order_id, product_code, unit_price, quantity, line_total
+      `).bind(unitPrice, lineTotal, itemId, orderId),
+    ]);
+    // changes() 僅在前一個 UPDATE 確實更新訂單時才允許修改明細。
+    if (!results[1].results.length) {
+      return c.json({ success: false, error: '訂單已結束、價格已變更或金額超出範圍，請重新整理' }, 409);
+    }
+    return c.json({ success: true, data: { order: results[0].results[0], item: results[1].results[0] } });
+  } catch (error) {
+    console.error('Order item price update failed:', error);
+    return c.json({ success: false, error: '儲存單價失敗' }, 500);
+  }
+});
+
 // 取得最近 50 筆訂單與商品明細
 app.get('/api/admin/orders', async (c) => {
   try {
@@ -571,7 +635,7 @@ app.get('/api/admin/orders', async (c) => {
 
     const itemResult = await c.env.DB.prepare(`
       SELECT
-        id, order_id, product_name, quantity,
+        id, order_id, product_code, product_name, quantity,
         unit_price, line_total, station, kitchen_status
       FROM order_items
       WHERE order_id IN (${placeholders})

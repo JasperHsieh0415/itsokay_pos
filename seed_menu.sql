@@ -73,7 +73,7 @@ VALUES
 -- 套餐：青醬帕尼尼
 ('M001', 11, '青醬帕尼尼套餐－燻雞', 'Pesto Panini Set-Smoked Chicken', 300, 'set', NULL, NULL, 1, 1, 'kitchen'),
 ('M002', 11, '青醬帕尼尼套餐－煙燻牛', 'Pesto Panini Set-Smoked Beef', 300, 'set', NULL, NULL, 1, 2, 'kitchen'),
-('M003', 11, '青醬帕尼尼套餐－義式野菇', 'Pesto Panini Set-Mushroom(Lacto-ovo vegetarian)', 300, 'set', NULL, NULL, 1, 3, 'kitchen'),
+('M003', 11, '青醬帕尼尼套餐－義式野菇', 'Pesto Panini Set-Mushroom(Lacto-ovo vegetarian)', 300, 'set', NULL, '蛋奶素', 1, 3, 'kitchen'),
 
 -- 套餐：古巴三明治
 ('M004', 12, '古巴三明治套餐－火烤牛肉', 'Bolognese Panini Set-Grilled Beef', 300, 'set', NULL, NULL, 1, 4, 'kitchen'),
@@ -87,13 +87,13 @@ VALUES
 -- 義大利麵／主餐
 ('M009', 21, '椰汁咖哩雞佐薑黃飯／麵包', 'Coconut Curry Chicken with Turmeric Rice or Bread', 290, 'single', 'starch', '飯或麵包擇一', 1, 9, 'kitchen'),
 ('M010', 22, '奶白醬義大利麵－菲力嫩雞', 'Creamy Alfredo Pasta with Tender Chicken Fillet', 280, 'single', NULL, NULL, 1, 10, 'kitchen'),
-('M011', 22, '奶白醬義大利麵－義式野菇(蛋奶素)', 'Creamy Alfredo Pasta with Italian Mushrooms(Lacto-ovo vegetarian)', 280, 'single', NULL, NULL, 1, 11, 'kitchen'),
+('M011', 22, '奶白醬義大利麵－義式野菇', 'Creamy Alfredo Pasta with Italian Mushrooms(Lacto-ovo vegetarian)', 280, 'single', NULL, '蛋奶素', 1, 11, 'kitchen'),
 ('M012', 22, '松露白酒海鮮義大利麵', 'Seafood Pasta with Truffle and White Wine Sauce', 320, 'single', NULL, '加點飲品折抵30元', 1, 12, 'kitchen'),
 ('M013', 22, '青醬菠菜義大利麵－菲力嫩雞', 'Spinach Pesto Pasta with Tender Chicken Fillet', 280, 'single', NULL, NULL, 1, 13, 'kitchen'),
-('M014', 22, '青醬菠菜義大利麵－義式野菇(蛋奶素)', 'Spinach Pesto Pasta with Italian Mushrooms(Lacto-ovo vegetarian)', 280, 'single', NULL, NULL, 1, 14, 'kitchen'),
+('M014', 22, '青醬菠菜義大利麵－義式野菇', 'Spinach Pesto Pasta with Italian Mushrooms(Lacto-ovo vegetarian)', 280, 'single', NULL, '蛋奶素', 1, 14, 'kitchen'),
 
 -- 漢堡
-('M015', 31, '竹炭漢堡－素排漢堡(蛋奶素)', 'Charcoal Bun Burger with Vegetarian Patty(Lacto-ovo vegetarian)', 230, 'single', 'burger', '起司／培根／鳳梨各+15元', 1, 15, 'kitchen'),
+('M015', 31, '竹炭漢堡－素排漢堡', 'Charcoal Bun Burger with Vegetarian Patty(Lacto-ovo vegetarian)', 230, 'single', 'burger', '蛋奶素, 起司／培根／鳳梨各+15元', 1, 15, 'kitchen'),
 ('M016', 32, '竹炭漢堡－厚牛肉排', 'Charcoal Bun Burger with Thick Beef Patty', 230, 'single', 'burger', '起司／培根／鳳梨各+15元', 1, 16, 'kitchen'),
 ('M017', 32, '竹炭漢堡－菲力嫩雞', 'Charcoal Bun Burger with Chicken Fillet', 230, 'single', 'burger', '起司／培根／鳳梨各+15元', 1, 17, 'kitchen'),
 ('M018', 32, '竹炭漢堡－豬漢堡排', 'Charcoal Bun Burger with Pork Patty', 230, 'single', 'burger', '起司／培根／鳳梨各+15元', 1, 18, 'kitchen'),
@@ -107,7 +107,7 @@ VALUES
 -- 麵包：貝果／帕尼尼
 ('M023', 42, '莓果乳酪貝果', 'Berry and Cream Cheese Bagel', 180, 'single', 'included', '蛋奶素；附美式咖啡或伯爵茶', 1, 23, 'bar'),
 ('M024', 43, '青醬帕尼尼－煙燻牛', 'Pesto Panini with Smoked Beef', 280, 'single', NULL, NULL, 1, 24, 'kitchen'),
-('M025', 43, '青醬帕尼尼－義式野菇', 'Pesto Panini with Italian-Style Mushrooms(Lacto-ovo vegetarian)', 280, 'single', NULL, NULL, 1, 25, 'kitchen'),
+('M025', 43, '青醬帕尼尼－義式野菇', 'Pesto Panini with Italian-Style Mushrooms(Lacto-ovo vegetarian)', 280, 'single', NULL, '蛋奶素', 1, 25, 'kitchen'),
 ('M026', 43, '青醬帕尼尼－燻雞', 'Pesto Panini with Smoked Chicken', 280, 'single', NULL, NULL, 1, 26, 'kitchen'),
 
 -- 點心

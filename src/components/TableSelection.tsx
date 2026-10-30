@@ -120,14 +120,20 @@ function TableIllustration({
           )}
         </g>
 
-        {/* 已選取標記 */}
-        {selected && (
-          <g className="cafe-table-check">
-            <circle cx="99" cy="20" r="15" />
-            <path d="M92 20 L97 25 L106 15" />
-          </g>
-        )}
       </svg>
+      {/* 選取標記獨立於桌面 SVG，避免跟著方桌的長寬比例拉伸。 */}
+      {selected && (
+        <svg
+          className="cafe-table-check"
+          viewBox="0 0 32 32"
+          preserveAspectRatio="xMidYMid meet"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <circle cx="16" cy="16" r="15" />
+          <path d="M9 16 L14 21 L23 11" />
+        </svg>
+      )}
       <span className="cafe-table-label">{table.id}</span>
     </span>
   );

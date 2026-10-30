@@ -169,7 +169,8 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
+  overflow-x: auto;
   margin: 16px 0;
   font-size: 20px;
   font-weight: 600;
@@ -177,8 +178,8 @@
 }
 
 .admin-order-items > div > span:first-child {
-  min-width: 0;
-  overflow-wrap: anywhere;
+  flex: 1 0 auto;
+  white-space: nowrap;
 }
 
 .admin-order-items > div > span:last-child {
@@ -194,6 +195,7 @@
 
 .admin-order-items small {
   display: block;
+  white-space: normal;
   margin-top: 4px;
   font-size: 16px;
   font-weight: 500;

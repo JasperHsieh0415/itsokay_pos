@@ -1,0 +1,13 @@
+.admin-order-items > div > .admin-item-price {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  text-align: right;
+}
+.admin-item-price-form { width: 240px; white-space: normal; margin-top: 8px; text-align: right; font-size: 14px; font-weight: 400; }
+.admin-item-price-form label { display: block; margin-bottom: 4px; }
+.admin-item-price-controls { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
+.admin-item-price-controls input { width: 100px; min-height: 38px; padding: 6px 8px; border: 1px solid #ded0c0; border-radius: 8px; font: inherit; }
+.admin-item-price-controls button { min-height: 38px; padding: 6px 10px; border: 0; border-radius: 8px; background: #537b59; color: #fff; font: inherit; cursor: pointer; }
+.admin-item-price-controls button:disabled { opacity: .55; cursor: not-allowed; }
+.admin-order-items .admin-item-price-form small { font-size: 13px; }
+.admin-item-price-error { color: #a34e41; }

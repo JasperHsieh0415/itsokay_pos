@@ -1,6 +1,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import './AdminOrders.css';
+import AdminOrderItemPrice from './AdminOrderItemPrice';
 
 type OrderStatus =
   | 'pending'
@@ -11,6 +12,8 @@ type OrderStatus =
   | 'cancelled';
 
 type OrderItem = {
+  id: string;
+  product_code: string;
   order_id: string;
   product_name: string;
   selected_options?: { option_name: string }[];
@@ -194,6 +197,31 @@ export default function AdminOrders() {
     }
   };
 
+  const updateItemPrice = async (order: Order, item: OrderItem, unitPrice: number) => {
+    if (busyId) throw new Error('其他操作處理中，請稍後再試');
+    setBusyId(order.id);
+    try {
+      const response = await fetch(
+        `/api/admin/orders/${encodeURIComponent(order.id)}/items/${encodeURIComponent(item.id)}/price`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+          body: JSON.stringify({ unit_price: unitPrice, expected_unit_price: item.unit_price }),
+        }
+      );
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error ?? '儲存單價失敗');
+      setOrders((current) => current.map((saved) => saved.id === order.id ? {
+        ...saved,
+        total_amount: result.data.order.total_amount,
+        items: saved.items.map((line) => line.id === item.id ? { ...line, ...result.data.item } : line),
+      } : saved));
+      await loadOrders();
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   if (!adminKey) {
     return (
       <main className="admin-login">
@@ -351,7 +379,20 @@ export default function AdminOrders() {
                           )}
                         </span>
 
-                        <span>NT${item.line_total}</span>
+                        <div className="admin-item-price">
+                          <span>NT${item.line_total.toLocaleString('zh-TW')}</span>
+                          {['M027', 'M047'].includes(item.product_code) && (
+                            <AdminOrderItemPrice
+                              key={`${item.id}:${item.unit_price}`}
+                              itemId={item.id}
+                              name={item.product_name}
+                              unitPrice={item.unit_price}
+                              quantity={item.quantity}
+                              disabled={busyId !== null}
+                              onSave={(price) => updateItemPrice(order, item, price)}
+                            />
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

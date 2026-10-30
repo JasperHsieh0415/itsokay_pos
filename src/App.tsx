@@ -12,6 +12,7 @@ import ProductCustomizationModal, {
 import { productOptions } from './data/productOptions';
 import DiningModeSelection from './components/DiningModeSelection';
 import TableSelection from './components/TableSelection';
+import CategoryNavigation from './components/CategoryNavigation';
 
 type Product = {
   id: number;
@@ -513,7 +514,7 @@ const groupedProducts = useMemo(() => {
       </header>
 
 
-    <nav className="category-nav" aria-label="商品分類">
+    <CategoryNavigation itemCount={mainCategories.length + 1}>
       {/* 全部商品 */}
       <button
         type="button"
@@ -558,7 +559,7 @@ const groupedProducts = useMemo(() => {
           </span>
         </button>
       ))}
-    </nav>
+    </CategoryNavigation>
 
     <div className="pos-content">
       <main className="menu-section">

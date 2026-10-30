@@ -40,6 +40,7 @@ function setup(t) {
   };
   return {
     sqlite,
+    request(path, options) { return app.request(path, options, env); },
     patch(path, body, role = 'admin') {
       return app.request(path, {
         method: 'PATCH',
@@ -209,4 +210,103 @@ test('force completion rolls back kitchen changes if completing the order fails'
   const item = sqlite.prepare('SELECT kitchen_status, kitchen_completed_at FROM order_items').get();
   assert.equal(item.kitchen_status, 'pending');
   assert.equal(item.kitchen_completed_at, null);
+});
+
+
+function addMarketProducts(sqlite) {
+  sqlite.exec(`INSERT INTO categories (id, parent_id, name) VALUES (90, NULL, 'Drinks'), (91, 90, 'Seasonal');
+    INSERT INTO products (id, product_code, name, price, category_id, station) VALUES
+    (227, 'M027', 'Cake', 0, 91, 'bar'), (247, 'M047', 'Juice', 0, 91, 'bar');`);
+}
+
+test('market item prices are per order line, preserve discounts and leave menu and new orders at zero', async (t) => {
+  const { sqlite, request, patch, post, get } = setup(t);
+  addMarketProducts(sqlite);
+  // Even prices saved by the former global-price API cannot affect ordering.
+  sqlite.exec("UPDATE products SET price = 999 WHERE product_code IN ('M027', 'M047')");
+  const menu = (await (await request('/api/menu')).json()).data;
+  assert.deepEqual(menu.map((p) => [p.product_code, p.price]), [['M027', 0], ['M047', 0]]);
+  const created = await post([
+    { product_code: 'M005', quantity: 1 },
+    { product_code: 'M027', quantity: 2 },
+    { product_code: 'M027', quantity: 1 },
+    { product_code: 'M047', quantity: 2 },
+  ]);
+  assert.equal(created.status, 201);
+  const initial = (await created.json()).data;
+  assert.equal(initial.total_amount, 270);
+  const otherId = (await (await post([{ product_code: 'M027', quantity: 1 }])).json()).data.order_id;
+  let order = (await (await get('admin')).json()).data.find((o) => o.id === initial.order_id);
+  const lines = order.items.filter((i) => ['M027', 'M047'].includes(i.product_code));
+  assert.deepEqual(lines.map((i) => [i.unit_price, i.line_total]), [[0, 0], [0, 0], [0, 0]]);
+  for (const [line, price] of [[lines[0], 120], [lines[1], 200], [lines[2], 150]]) {
+    const result = await patch(`/api/admin/orders/${order.id}/items/${line.id}/price`, {
+      unit_price: price, expected_unit_price: 0,
+    });
+    assert.equal(result.status, 200);
+    assert.equal((await result.json()).data.item.line_total, price * line.quantity);
+  }
+  order = (await (await get('admin')).json()).data.find((o) => o.id === initial.order_id);
+  assert.equal(order.subtotal_amount, 1040);
+  assert.equal(order.discount_amount, 30);
+  assert.equal(order.total_amount, 1010);
+  assert.deepEqual(order.items.filter((i) => i.product_code === 'M027').map((i) => i.unit_price), [120, 200]);
+  // Further edits use the saved line price and can reduce the total.
+  assert.equal((await patch(`/api/admin/orders/${order.id}/items/${lines[0].id}/price`, {
+    unit_price: 80, expected_unit_price: 120,
+  })).status, 200);
+  assert.equal(sqlite.prepare('SELECT total_amount FROM orders WHERE id = ?').get(order.id).total_amount, 930);
+  assert.equal(sqlite.prepare('SELECT total_amount FROM orders WHERE id = ?').get(otherId).total_amount, 0);
+  const next = (await (await post([{ product_code: 'M027', quantity: 1 }, { product_code: 'M047', quantity: 1 }])).json()).data;
+  assert.equal(next.total_amount, 0);
+  assert.deepEqual((await (await request('/api/menu')).json()).data.map((p) => p.price), [0, 0]);
+  assert.equal((await request('/api/admin/market-prices', { headers: { Authorization: 'Bearer admin-test' } })).status, 404);
+});
+
+test('order item prices reject invalid, unauthorized, stale, wrong-order and non-market edits', async (t) => {
+  const { sqlite, request, patch, post } = setup(t);
+  addMarketProducts(sqlite);
+  const orderId = (await (await post([{ product_code: 'M027', quantity: 2 }, { product_code: 'PLAIN', quantity: 1 }])).json()).data.order_id;
+  const marketId = sqlite.prepare("SELECT id FROM order_items WHERE order_id = ? AND product_code = 'M027'").get(orderId).id;
+  const plainId = sqlite.prepare("SELECT id FROM order_items WHERE order_id = ? AND product_code = 'PLAIN'").get(orderId).id;
+  const path = `/api/admin/orders/${orderId}/items/${marketId}/price`;
+  const valid = { unit_price: 120, expected_unit_price: 0 };
+  assert.equal((await request(path, { method: 'PATCH', body: JSON.stringify(valid) })).status, 401);
+  assert.equal((await patch(path, valid, 'chef')).status, 401);
+  for (const unit_price of [-1, 1.5, '100', null, true, 9007199254740992, Number.MAX_SAFE_INTEGER]) {
+    assert.equal((await patch(path, { ...valid, unit_price })).status, 400);
+  }
+  for (const body of [null, [], {}, { unit_price: 100 }, { unit_price: 100, expected_unit_price: '0' }]) {
+    assert.equal((await patch(path, body)).status, 400);
+  }
+  assert.equal((await request(path, { method: 'PATCH', body: '{', headers: { Authorization: 'Bearer admin-test' } })).status, 400);
+  assert.equal((await patch(`/api/admin/orders/${orderId}/items/${plainId}/price`, valid)).status, 404);
+  assert.equal((await patch(`/api/admin/orders/wrong-order/items/${marketId}/price`, valid)).status, 404);
+  assert.equal((await patch(`/api/admin/orders/${orderId}/items/missing/price`, valid)).status, 404);
+  assert.equal((await patch(path, valid)).status, 200);
+  assert.equal((await patch(path, { ...valid, unit_price: 500 })).status, 409);
+  assert.equal(sqlite.prepare('SELECT total_amount FROM orders WHERE id = ?').get(orderId).total_amount, 390);
+  assert.equal(sqlite.prepare('SELECT unit_price FROM order_items WHERE id = ?').get(marketId).unit_price, 120);
+  assert.equal((await patch(path, { unit_price: 0, expected_unit_price: 120 })).status, 200);
+  assert.equal(sqlite.prepare('SELECT total_amount FROM orders WHERE id = ?').get(orderId).total_amount, 150);
+});
+
+test('completed and cancelled orders reject repricing and item failure rolls back the order total', async (t) => {
+  const { sqlite, patch, post } = setup(t);
+  addMarketProducts(sqlite);
+  for (const status of ['completed', 'cancelled']) {
+    const id = (await (await post([{ product_code: 'M047', quantity: 1 }])).json()).data.order_id;
+    const itemId = sqlite.prepare('SELECT id FROM order_items WHERE order_id = ?').get(id).id;
+    assert.equal((await patch(`/api/admin/orders/${id}/status`, { status, expected_status: 'pending' })).status, 200);
+    assert.equal((await patch(`/api/admin/orders/${id}/items/${itemId}/price`, { unit_price: 100, expected_unit_price: 0 })).status, 409);
+    assert.equal(sqlite.prepare('SELECT total_amount FROM orders WHERE id = ?').get(id).total_amount, 0);
+    assert.equal(sqlite.prepare('SELECT unit_price FROM order_items WHERE id = ?').get(itemId).unit_price, 0);
+  }
+  const id = (await (await post([{ product_code: 'M027', quantity: 1 }])).json()).data.order_id;
+  const itemId = sqlite.prepare('SELECT id FROM order_items WHERE order_id = ?').get(id).id;
+  sqlite.exec(`CREATE TRIGGER fail_price BEFORE UPDATE OF unit_price ON order_items
+    BEGIN SELECT RAISE(ABORT, 'test price transaction failure'); END;`);
+  assert.equal((await patch(`/api/admin/orders/${id}/items/${itemId}/price`, { unit_price: 200, expected_unit_price: 0 })).status, 500);
+  assert.equal(sqlite.prepare('SELECT total_amount FROM orders WHERE id = ?').get(id).total_amount, 0);
+  assert.equal(sqlite.prepare('SELECT line_total FROM order_items WHERE id = ?').get(itemId).line_total, 0);
 });

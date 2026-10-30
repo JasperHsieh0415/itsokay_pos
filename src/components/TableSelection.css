@@ -420,6 +420,16 @@
   stroke-width: 2;
 }
 
+.cafe-table-check {
+  position: absolute;
+  left: 82.5%;
+  top: 16.6667%;
+  width: 30px;
+  height: 30px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
 .cafe-table-check circle {
   fill: #52785c;
   stroke: #fff;

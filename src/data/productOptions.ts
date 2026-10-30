@@ -95,32 +95,6 @@ export const productOptions: Record<
     },
   ],
 
-  M010: [
-    {
-      id: 'starch',
-      name: '素食版本', englishName: 'Vegetarian options',
-      selectionType: 'single',
-      required: true,
-      options: [
-        { id: 'vegan', name: '全素', englishName: 'Vegan', priceDelta: 0 },
-        { id: 'Lacto-ovo', name: '蛋奶素', englishName: 'Lacto-ovo vegetarian', priceDelta: 0 },
-      ],
-    },
-  ],
-
-  M013: [
-    {
-      id: 'starch',
-      name: '素食版本', englishName: 'Vegetarian options',
-      selectionType: 'single',
-      required: true,
-      options: [
-        { id: 'vegan', name: '全素', englishName: 'Vegan', priceDelta: 0 },
-        { id: 'Lacto-ovo', name: '蛋奶素', englishName: 'Lacto-ovo vegetarian', priceDelta: 0 },
-      ],
-    },
-  ],
-
   M015: [
     {
       id: 'burger-extra',
