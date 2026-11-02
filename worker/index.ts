@@ -473,6 +473,7 @@ type OrderRow = {
   table_id: string | null;
   status: OrderStatus;
   total_amount: number;
+  custom_discount_amount: number;
   created_at: string;
 };
 
@@ -612,13 +613,49 @@ app.patch('/api/admin/orders/:id/items/:itemId/price', async (c) => {
   }
 });
 
+// 自訂減免以差額更新總額，保留原有餐飲優惠。
+app.patch('/api/admin/orders/:id/discount', async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ success: false, error: 'Invalid JSON body' }, 400);
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return c.json({ success: false, error: 'Invalid request body' }, 400);
+  }
+  const { custom_discount_amount: amount, expected_custom_discount_amount: expected } = body as Record<string, unknown>;
+  if (typeof amount !== 'number' || !Number.isSafeInteger(amount) || amount < 0 ||
+      typeof expected !== 'number' || !Number.isSafeInteger(expected) || expected < 0) {
+    return c.json({ success: false, error: '減免金額必須是 0 或正整數' }, 400);
+  }
+  try {
+    const order = await c.env.DB.prepare(`
+      UPDATE orders
+      SET total_amount = total_amount + custom_discount_amount - ?,
+          custom_discount_amount = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status NOT IN ('completed', 'cancelled')
+        AND custom_discount_amount = ?
+        AND total_amount + custom_discount_amount - ? BETWEEN 0 AND 9007199254740991
+      RETURNING id, total_amount, custom_discount_amount
+    `).bind(amount, amount, c.req.param('id'), expected, amount).first();
+    if (!order) {
+      return c.json({ success: false, error: '訂單已結束、減免已變更或減免超過應付金額，請重新整理後再試' }, 409);
+    }
+    return c.json({ success: true, data: order });
+  } catch (error) {
+    console.error('Order discount update failed:', error);
+    return c.json({ success: false, error: '儲存減免失敗' }, 500);
+  }
+});
+
 // 取得最近 50 筆訂單與商品明細
 app.get('/api/admin/orders', async (c) => {
   try {
     const ordersResult = await c.env.DB.prepare(`
       SELECT
         id, order_number, dining_mode, table_id,
-        status, total_amount, created_at
+        status, total_amount, custom_discount_amount, created_at
       FROM orders
       ORDER BY created_at DESC, id DESC
       LIMIT 50
@@ -660,7 +697,7 @@ app.get('/api/admin/orders', async (c) => {
       return {
         ...order,
         subtotal_amount: subtotalAmount,
-        discount_amount: subtotalAmount - order.total_amount,
+        discount_amount: subtotalAmount - order.total_amount - order.custom_discount_amount,
         items: orderItems,
       };
     });

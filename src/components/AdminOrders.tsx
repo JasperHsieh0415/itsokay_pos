@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import './AdminOrders.css';
 import AdminOrderItemPrice from './AdminOrderItemPrice';
+import AdminOrderDiscount from './AdminOrderDiscount';
 
 type OrderStatus =
   | 'pending'
@@ -32,6 +33,7 @@ type Order = {
   status: OrderStatus;
   total_amount: number;
   discount_amount?: number;
+  custom_discount_amount: number;
   created_at: string;
   items: OrderItem[];
 };
@@ -222,6 +224,28 @@ export default function AdminOrders() {
     }
   };
 
+  const updateDiscount = async (order: Order, amount: number) => {
+    if (busyId) throw new Error('其他操作處理中，請稍後再試');
+    setBusyId(order.id);
+    try {
+      const response = await fetch(`/api/admin/orders/${encodeURIComponent(order.id)}/discount`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        body: JSON.stringify({
+          custom_discount_amount: amount,
+          expected_custom_discount_amount: order.custom_discount_amount,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error ?? '儲存減免失敗');
+      setOrders((current) => current.map((saved) => saved.id === order.id
+        ? { ...saved, ...result.data } : saved));
+      await loadOrders();
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   if (!adminKey) {
     return (
       <main className="admin-login">
@@ -344,6 +368,30 @@ export default function AdminOrders() {
                       </h3>
                       <small>#{order.order_number}</small>
                     </div>
+                    <div className="admin-order-heading-actions">
+                      <AdminOrderDiscount
+                        key={order.id}
+                        orderId={order.id}
+                        amount={order.custom_discount_amount}
+                        maxAmount={order.total_amount + order.custom_discount_amount}
+                        disabled={busyId !== null}
+                        onSave={(amount) => updateDiscount(order, amount)}
+                      />
+                      {!kitchenComplete && (
+                        <button
+                          type="button"
+                          className="admin-force-complete"
+                          disabled={busyId !== null}
+                          onClick={() => {
+                            if (window.confirm(`確定強制完成訂單 #${order.order_number}？尚未完成的熟食也會標記為完成，並從廚房待處理清單移除。`)) {
+                              updateStatus(order, 'completed', true);
+                            }
+                          }}
+                        >
+                          {busyId === order.id ? '處理中...' : '強制完成'}
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <p className="admin-order-time">
@@ -402,6 +450,11 @@ export default function AdminOrders() {
                       餐點搭飲品優惠 − NT${order.discount_amount?.toLocaleString()}
                     </p>
                   )}
+                  {order.custom_discount_amount > 0 && (
+                    <p className="admin-order-discount">
+                      自訂減免 − NT${order.custom_discount_amount.toLocaleString('zh-TW')}
+                    </p>
+                  )}
                   <div className="admin-order-total">
                     <span>總金額</span>
                     <strong>
@@ -456,21 +509,6 @@ export default function AdminOrders() {
                     >
                       {busyId === order.id ? '處理中...' : '完成訂單'}
                     </button>
-
-                    {!kitchenComplete && (
-                      <button
-                        type="button"
-                        className="admin-force-complete"
-                        disabled={busyId !== null}
-                        onClick={() => {
-                          if (window.confirm(`確定強制完成訂單 #${order.order_number}？尚未完成的熟食也會標記為完成，並從廚房待處理清單移除。`)) {
-                            updateStatus(order, 'completed', true);
-                          }
-                        }}
-                      >
-                        {busyId === order.id ? '處理中...' : '強制完成'}
-                      </button>
-                    )}
 
                     {/* 取消訂單：不受熟食狀態限制 */}
                     <button
@@ -539,7 +577,14 @@ export default function AdminOrders() {
                           </div>
                         )}
                       </td>
-                      <td>NT${order.total_amount.toLocaleString()}</td>
+                      <td>
+                        {order.custom_discount_amount > 0 && (
+                          <div className="admin-order-discount">
+                            自訂減免 − NT${order.custom_discount_amount.toLocaleString('zh-TW')}
+                          </div>
+                        )}
+                        NT${order.total_amount.toLocaleString()}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

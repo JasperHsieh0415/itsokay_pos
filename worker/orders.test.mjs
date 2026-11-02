@@ -8,7 +8,7 @@ import app from './index.ts';
 function setup(t) {
   const sqlite = new DatabaseSync(':memory:');
   t.after(() => sqlite.close());
-  for (const file of ['0001_init.sql', '0002_add_menu_categories.sql', '0003_create_orders.sql', '0004_add_kitchen_workflow.sql']) {
+  for (const file of ['0001_init.sql', '0002_add_menu_categories.sql', '0003_create_orders.sql', '0004_add_kitchen_workflow.sql', '0005_add_custom_discount.sql']) {
     sqlite.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
   }
   sqlite.exec(`INSERT INTO products (id, product_code, name, price, station) VALUES
@@ -309,4 +309,67 @@ test('completed and cancelled orders reject repricing and item failure rolls bac
   assert.equal((await patch(`/api/admin/orders/${id}/items/${itemId}/price`, { unit_price: 200, expected_unit_price: 0 })).status, 500);
   assert.equal(sqlite.prepare('SELECT total_amount FROM orders WHERE id = ?').get(id).total_amount, 0);
   assert.equal(sqlite.prepare('SELECT line_total FROM order_items WHERE id = ?').get(itemId).line_total, 0);
+});
+
+test('custom discounts replace and clear independently of meal offers and market price edits', async (t) => {
+  const { post, patch, get, sqlite } = setup(t);
+  addMarketProducts(sqlite);
+  const created = (await (await post([
+    { product_code: 'M005', quantity: 1 },
+    { product_code: 'M036', quantity: 1, selected_options: [option('Hot', 'temp')] },
+    { product_code: 'M027', quantity: 1 },
+  ])).json()).data;
+  const path = `/api/admin/orders/${created.order_id}/discount`;
+  const save = (amount, expected) => patch(path, { custom_discount_amount: amount, expected_custom_discount_amount: expected });
+  for (const [amount, expected, total] of [[50, 0, 320], [100, 50, 270], [370, 100, 0], [0, 370, 370]]) {
+    const response = await save(amount, expected);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).data.total_amount, total);
+    const order = (await (await get('admin')).json()).data[0];
+    assert.equal(order.custom_discount_amount, amount);
+    assert.equal(order.discount_amount, 30);
+    assert.equal(order.total_amount, total);
+  }
+  assert.equal((await save(50, 0)).status, 200);
+  const item = sqlite.prepare("SELECT id FROM order_items WHERE product_code = 'M027'").get();
+  assert.equal((await patch(`/api/admin/orders/${created.order_id}/items/${item.id}/price`, {
+    unit_price: 120, expected_unit_price: 0,
+  })).status, 200);
+  let order = (await (await get('admin')).json()).data[0];
+  assert.equal(order.custom_discount_amount, 50);
+  assert.equal(order.discount_amount, 30);
+  assert.equal(order.total_amount, 440);
+  assert.equal((await save(490, 50)).status, 200);
+  // Reducing the item price must not produce a negative total or partially update the item.
+  assert.equal((await patch(`/api/admin/orders/${created.order_id}/items/${item.id}/price`, {
+    unit_price: 0, expected_unit_price: 120,
+  })).status, 409);
+  order = (await (await get('admin')).json()).data[0];
+  assert.equal(order.total_amount, 0);
+  assert.equal(order.items.find((line) => line.id === item.id).unit_price, 120);
+});
+
+test('custom discounts reject invalid, unauthorized, stale, excessive and closed-order writes', async (t) => {
+  const { post, patch, request, sqlite } = setup(t);
+  const { order_id } = (await (await post([{ product_code: 'PLAIN', quantity: 1 }])).json()).data;
+  const path = `/api/admin/orders/${order_id}/discount`;
+  const valid = { custom_discount_amount: 20, expected_custom_discount_amount: 0 };
+  assert.equal((await request(path, { method: 'PATCH', body: JSON.stringify(valid) })).status, 401);
+  assert.equal((await patch(path, valid, 'chef')).status, 401);
+  for (const amount of [-1, 1.5, '20', null, true, 9007199254740992]) {
+    assert.equal((await patch(path, { ...valid, custom_discount_amount: amount })).status, 400);
+  }
+  for (const body of [null, [], {}, { custom_discount_amount: 20 }, { ...valid, expected_custom_discount_amount: '0' }]) {
+    assert.equal((await patch(path, body)).status, 400);
+  }
+  assert.equal((await request(path, { method: 'PATCH', headers: { Authorization: 'Bearer admin-test', 'Content-Type': 'application/json' }, body: '{' })).status, 400);
+  assert.equal((await patch(path, { ...valid, custom_discount_amount: 151 })).status, 409);
+  assert.equal((await patch(path, valid)).status, 200);
+  assert.equal((await patch(path, { ...valid, custom_discount_amount: 40 })).status, 409);
+  assert.equal(sqlite.prepare('SELECT total_amount FROM orders').get().total_amount, 130);
+  for (const status of ['completed', 'cancelled']) {
+    sqlite.prepare('UPDATE orders SET status = ?').run(status);
+    assert.equal((await patch(path, { custom_discount_amount: 0, expected_custom_discount_amount: 20 })).status, 409);
+    assert.equal(sqlite.prepare('SELECT total_amount FROM orders').get().total_amount, 130);
+  }
 });

@@ -416,9 +416,9 @@
 
 
 .admin-kitchen-progress {
-  margin: 14px 0;
-  padding: 14px;
-  border-radius: 10px;
+  margin: 10px 0;
+  padding: 10px;
+  border-radius: 8px;
 }
 
 .admin-kitchen-progress.is-waiting {
@@ -435,13 +435,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
-  font-size: 15px;
+  margin-bottom: 7px;
+  font-size: 14px;
 }
 
 .admin-kitchen-bar {
   width: 100%;
-  height: 7px;
+  height: 6px;
   overflow: hidden;
   background: #e4dbd1;
   border-radius: 8px;
@@ -455,8 +455,8 @@
 }
 
 .admin-kitchen-progress p {
-  margin: 10px 0 0;
-  font-size: 15px;
+  margin: 7px 0 0;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -481,13 +481,12 @@
   background: #416a48;
 }
 
-.admin-order-buttons .admin-force-complete {
-  flex: 1;
+.admin-order-heading-actions .admin-force-complete {
   background: #a76a24;
   color: white;
 }
 
-.admin-order-buttons .admin-force-complete:hover:not(:disabled) {
+.admin-order-heading-actions .admin-force-complete:hover:not(:disabled) {
   background: #87531a;
 }
 
@@ -505,3 +504,20 @@
   background: #f5e9e5;
   color: #a34e41;
 }
+
+.admin-order-heading-actions { display: flex; flex-direction: column; flex-shrink: 0; gap: 8px; }
+.admin-order-heading-actions > button { box-sizing: border-box; width: 104px; height: 40px; padding: 8px 12px; border: 1px solid transparent; border-radius: 8px; font: inherit; font-size: 14px; line-height: 20px; white-space: nowrap; cursor: pointer; }
+.admin-order-heading-actions .admin-discount-trigger { border-color: #537b59; background: #f0f6ef; color: #416a48; }
+.admin-order-heading-actions > button:disabled { opacity: .55; cursor: not-allowed; }
+.admin-discount-dialog { box-sizing: border-box; width: min(420px, calc(100% - 32px)); max-height: calc(100dvh - 32px); padding: 24px; border: 0; border-radius: 16px; background: #fffdf9; color: #493c32; box-shadow: 0 20px 60px #0003; overflow-y: auto; }
+.admin-discount-dialog::backdrop { background: #0007; }
+.admin-discount-form { font-size: 16px; }
+.admin-discount-form h2 { margin: 0 0 20px; font-size: 22px; }
+.admin-discount-form label { display: block; margin-bottom: 8px; }
+.admin-discount-form input { box-sizing: border-box; width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid #ded0c0; border-radius: 8px; font: inherit; }
+.admin-discount-help { color: #796b60; font-size: 14px; line-height: 1.6; }
+.admin-discount-controls { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+.admin-discount-controls button { min-height: 44px; padding: 8px 16px; border: 0; border-radius: 8px; background: #537b59; color: white; font: inherit; cursor: pointer; }
+.admin-discount-controls .admin-discount-cancel { background: #eee7dd; color: #493c32; }
+.admin-discount-controls button:disabled { opacity: .55; cursor: not-allowed; }
+.admin-discount-error { color: #a34e41; font-size: 14px; }
