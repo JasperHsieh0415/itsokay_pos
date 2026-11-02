@@ -661,7 +661,8 @@ app.get('/api/admin/orders', async (c) => {
       LIMIT 50
     `).all<OrderRow>();
 
-    const orders = ordersResult.results;
+    // 最近 50 筆訂單依下單時間由舊到新顯示。
+    const orders = ordersResult.results.reverse();
 
     if (orders.length === 0) {
       c.header('Cache-Control', 'no-store');
