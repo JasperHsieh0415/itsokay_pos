@@ -1,0 +1,98 @@
+.order-sound {
+  width: min(640px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 20px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  color: #46372e;
+  font-family: inherit;
+  border: 1px solid #ded0c0;
+  border-radius: 10px;
+  background: #fffdf9;
+}
+.order-sound::backdrop {
+  background: #0007;
+}
+.order-sound-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.order-sound-dialog-header h2 {
+  margin: 0;
+  font-size: 22px;
+}
+.order-sound-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.order-sound button {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid #b8a28e;
+  border-radius: 8px;
+  background: white;
+  color: #79543d;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.order-sound button[aria-pressed="true"] {
+  border-color: #537b59;
+  background: #edf5ec;
+  color: #416a48;
+}
+.order-sound button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.order-sound p {
+  margin: 8px 0 0;
+  color: #796b60;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.order-sound .order-sound-error {
+  color: #a34e41;
+}
+
+.order-sound .order-sound-label {
+  margin-top: 14px;
+  margin-bottom: 8px;
+  color: #46372e;
+  font-weight: 700;
+}
+.order-sound-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: 8px;
+}
+.order-sound-options button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 64px;
+  text-align: left;
+}
+.order-sound-options button span {
+  font-weight: 700;
+}
+.order-sound-options button small {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.order-sound button:focus-visible {
+  outline: 2px solid #79543d;
+  outline-offset: 3px;
+}
+
+.order-sound-duration { margin-top: 18px; }
+.order-sound-duration label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 700; }
+.order-sound-duration-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.order-sound-duration input { box-sizing: border-box; width: 88px; min-height: 40px; padding: 8px; border: 1px solid #b8a28e; border-radius: 8px; background: white; color: #46372e; font: inherit; }
+.order-sound-duration input:focus-visible { outline: 2px solid #79543d; outline-offset: 3px; }

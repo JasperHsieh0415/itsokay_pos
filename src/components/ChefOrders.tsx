@@ -1,6 +1,8 @@
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './ChefOrders.css';
+import useOrderSound from '../hooks/useOrderSound';
+import OrderSoundControls from './OrderSoundControls';
 
 type ChefStatus = 'pending' | 'preparing' | 'ready';
 
@@ -52,10 +54,17 @@ export default function ChefOrders() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
+  const sound = useOrderSound('chef');
+  const { observeOrders, reset: resetOrderSound } = sound;
+  const requestSequence = useRef(0);
+  const invalidateRequests = useCallback(() => { requestSequence.current++; }, []);
+
   const loadOrders = useCallback(async (
     signal?: AbortSignal
   ) => {
     if (!chefKey) return;
+    const requestId = ++requestSequence.current;
+    const isStale = () => signal?.aborted || requestId !== requestSequence.current;
 
     try {
       const response = await fetch('/api/chef/orders', {
@@ -66,9 +75,12 @@ export default function ChefOrders() {
         signal,
       });
 
+      if (isStale()) return;
+
       if (response.status === 401) {
         if (!signal?.aborted) {
           setError('Chef 密鑰錯誤或已失效');
+          resetOrderSound();
           setChefKey('');
           setItems([]);
         }
@@ -80,21 +92,27 @@ export default function ChefOrders() {
       }
 
       const result = await response.json();
+      if (isStale()) return;
 
       if (!result.success || !Array.isArray(result.data)) {
         throw new Error('Invalid API response');
       }
 
       if (!signal?.aborted) {
+        const nextItems = result.data as ChefItem[];
+        observeOrders(
+          nextItems.map((item) => item.order_id),
+          nextItems.filter((item) => item.kitchen_status !== 'ready').map((item) => item.order_id),
+        );
         setItems(result.data);
         setError('');
       }
     } catch (err) {
-      if (signal?.aborted) return;
+      if (isStale()) return;
       console.error(err);
       setError('無法取得廚房訂單');
     }
-  }, [chefKey]);
+  }, [chefKey, observeOrders, resetOrderSound]);
 
   useEffect(() => {
     if (!chefKey) return;
@@ -114,10 +132,11 @@ export default function ChefOrders() {
     }, 5000);
 
     return () => {
+      invalidateRequests();
       window.clearInterval(timer);
       controller.abort();
     };
-  }, [chefKey, loadOrders]);
+  }, [chefKey, loadOrders, invalidateRequests]);
 
   const tickets = useMemo<ChefTicket[]>(() => {
     const map = new Map<string, ChefTicket>();
@@ -210,6 +229,7 @@ export default function ChefOrders() {
             event.preventDefault();
             if (!keyInput.trim()) return;
             setError('');
+            resetOrderSound();
             setChefKey(keyInput.trim());
             setKeyInput('');
           }}
@@ -260,10 +280,12 @@ export default function ChefOrders() {
         </div>
 
         <div className="chef-header-actions">
+          <OrderSoundControls sound={sound} />
           <button onClick={() => loadOrders()}>
             重新整理
           </button>
           <button onClick={() => {
+            resetOrderSound();
             setChefKey('');
             setItems([]);
           }}>

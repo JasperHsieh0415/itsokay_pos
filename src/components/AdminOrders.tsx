@@ -1,6 +1,8 @@
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import './AdminOrders.css';
+import useOrderSound from '../hooks/useOrderSound';
+import OrderSoundControls from './OrderSoundControls';
 import AdminOrderItemPrice from './AdminOrderItemPrice';
 import AdminOrderDiscount from './AdminOrderDiscount';
 
@@ -86,10 +88,17 @@ export default function AdminOrders() {
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  const sound = useOrderSound('admin');
+  const { observeOrders, reset: resetOrderSound } = sound;
+  const requestSequence = useRef(0);
+  const invalidateRequests = useCallback(() => { requestSequence.current++; }, []);
+
   const loadOrders = useCallback(async (
     signal?: AbortSignal
   ) => {
     if (!adminKey) return;
+    const requestId = ++requestSequence.current;
+    const isStale = () => signal?.aborted || requestId !== requestSequence.current;
 
     try {
       const response = await fetch('/api/admin/orders', {
@@ -100,8 +109,11 @@ export default function AdminOrders() {
         signal,
       });
 
+      if (isStale()) return;
+
       if (response.status === 401) {
         setError('管理密鑰不正確');
+        resetOrderSound();
         setAdminKey('');
         setOrders([]);
         return;
@@ -112,20 +124,27 @@ export default function AdminOrders() {
       }
 
       const result = await response.json();
+      if (isStale()) return;
 
       if (!result.success || !Array.isArray(result.data)) {
         throw new Error('Invalid response');
       }
 
+      const nextOrders = result.data as Order[];
+      observeOrders(
+        nextOrders.map((order) => order.id),
+        nextOrders.filter((order) => order.status !== 'completed' && order.status !== 'cancelled')
+          .map((order) => order.id),
+      );
       setToday(getOrderDay(new Date()));
       setOrders(result.data);
       setError('');
     } catch (err) {
-      if (signal?.aborted) return;
+      if (isStale()) return;
       setError('無法取得訂單資料，請確認 Worker 及 D1');
       console.error(err);
     }
-  }, [adminKey]);
+  }, [adminKey, observeOrders, resetOrderSound]);
 
   useEffect(() => {
     if (!adminKey) return;
@@ -146,10 +165,11 @@ export default function AdminOrders() {
     }, 5000);
 
     return () => {
+      invalidateRequests();
       controller.abort();
       window.clearInterval(timer);
     };
-  }, [adminKey, loadOrders]);
+  }, [adminKey, loadOrders, invalidateRequests]);
 
   const updateStatus = async (
     order: Order,
@@ -254,6 +274,7 @@ export default function AdminOrders() {
           onSubmit={(event) => {
             event.preventDefault();
             if (keyInput.trim()) {
+              resetOrderSound();
               setAdminKey(keyInput.trim());
               setKeyInput('');
             }
@@ -302,11 +323,13 @@ export default function AdminOrders() {
           <p>Order Management · 每 5 秒自動更新</p>
         </div>
         <div className="admin-actions">
+          <OrderSoundControls sound={sound} />
           <button onClick={() => loadOrders()}>
             重新整理
           </button>
           <button
             onClick={() => {
+              resetOrderSound();
               setAdminKey('');
               setOrders([]);
             }}
