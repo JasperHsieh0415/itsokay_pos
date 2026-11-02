@@ -5,6 +5,7 @@ import useOrderSound from '../hooks/useOrderSound';
 import OrderSoundControls from './OrderSoundControls';
 import AdminOrderItemPrice from './AdminOrderItemPrice';
 import AdminOrderDiscount from './AdminOrderDiscount';
+import AdminFinance from './AdminFinance';
 
 type OrderStatus =
   | 'pending'
@@ -79,7 +80,18 @@ function getOrderDay(value: string | Date) {
       }).format(date);
 }
 
-export default function AdminOrders() {
+export default function AdminOrders({ initialFinance = false }: { initialFinance?: boolean }) {
+  const [finance, setFinance] = useState(initialFinance);
+  useEffect(() => {
+    const onPopState = () => setFinance(window.location.pathname.replace(/\/+$/, '') === '/admin/finance');
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+  const navigate = (path: '/admin' | '/admin/finance') => {
+    window.history.pushState(null, '', path);
+    setFinance(path === '/admin/finance');
+    window.scrollTo(0, 0);
+  };
   const [keyInput, setKeyInput] = useState('');
   const [adminKey, setAdminKey] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
@@ -281,7 +293,7 @@ export default function AdminOrders() {
           }}
         >
           <h1>It's okay</h1>
-          <h2>櫃台訂單管理</h2>
+          <h2>{finance ? '財務管理' : '櫃台訂單管理'}</h2>
           <p>請輸入管理密鑰</p>
           {error && <p role="alert">{error}</p>}
           <input
@@ -296,6 +308,19 @@ export default function AdminOrders() {
         </form>
       </main>
     );
+  }
+
+  if (finance) {
+    return <AdminFinance
+      adminKey={adminKey}
+      onBack={() => navigate('/admin')}
+      onLogout={() => {
+        invalidateRequests();
+        resetOrderSound();
+        setAdminKey('');
+        setOrders([]);
+      }}
+    />;
   }
 
   const activeOrders = orders.filter(
@@ -323,6 +348,7 @@ export default function AdminOrders() {
           <p>Order Management · 每 5 秒自動更新</p>
         </div>
         <div className="admin-actions">
+          <button type="button" onClick={() => navigate('/admin/finance')}>財務管理</button>
           <OrderSoundControls sound={sound} />
           <button onClick={() => loadOrders()}>
             重新整理

@@ -649,24 +649,70 @@ app.patch('/api/admin/orders/:id/discount', async (c) => {
   }
 });
 
-// 取得最近 50 筆訂單與商品明細
-app.get('/api/admin/orders', async (c) => {
+// 以台灣下單月份統計完成訂單的實收金額，與上一個日曆月份比較。
+app.get('/api/admin/finance/months', async (c) => {
   try {
+    const { results } = await c.env.DB.prepare(`
+      WITH monthly AS (
+        SELECT strftime('%Y-%m', created_at, '+8 hours') AS month,
+          COUNT(*) AS order_count,
+          SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
+          SUM(CASE WHEN status = 'completed' THEN total_amount ELSE 0 END) AS total_income
+        FROM orders
+        GROUP BY month
+      )
+      SELECT current.month, current.order_count, current.completed_count, current.total_income,
+        strftime('%Y-%m', current.month || '-01', '-1 month') AS previous_month,
+        COALESCE(previous.total_income, 0) AS previous_income,
+        CASE WHEN COALESCE(previous.total_income, 0) > 0
+          THEN (current.total_income - previous.total_income) * 100.0 / previous.total_income
+          ELSE NULL END AS change_percent
+      FROM monthly current
+      LEFT JOIN monthly previous
+        ON previous.month = strftime('%Y-%m', current.month || '-01', '-1 month')
+      ORDER BY current.month ASC
+    `).all();
+    c.header('Cache-Control', 'no-store');
+    return c.json({ success: true, data: results });
+  } catch (error) {
+    console.error('Finance monthly summary failed:', error);
+    return c.json({ success: false, error: 'Database error' }, 500);
+  }
+});
+
+// 取得櫃台最近 50 筆訂單或財務歷史訂單與商品明細
+app.on('GET', ['/api/admin/orders', '/api/admin/finance/orders'], async (c) => {
+  const isFinance = c.req.path === '/api/admin/finance/orders';
+  const month = isFinance ? c.req.query('month') : undefined;
+  const pageInput = c.req.query('page') ?? '1';
+  const page = Number(pageInput);
+  if (isFinance && (!/^[1-9]\d*$/.test(pageInput) || !Number.isSafeInteger(page * 50))) {
+    return c.json({ success: false, error: 'Invalid page' }, 400);
+  }
+  if (month !== undefined && !/^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(month)) {
+    return c.json({ success: false, error: 'Invalid month' }, 400);
+  }
+  try {
+    const count = isFinance
+      ? await c.env.DB.prepare("SELECT COUNT(*) AS total FROM orders WHERE (? IS NULL OR strftime('%Y-%m', created_at, '+8 hours') = ?)").bind(month ?? null, month ?? null).first<{ total: number }>()
+      : null;
+    const pagination = isFinance ? { page, page_size: 50, total: count?.total ?? 0 } : undefined;
     const ordersResult = await c.env.DB.prepare(`
       SELECT
         id, order_number, dining_mode, table_id,
         status, total_amount, custom_discount_amount, created_at
       FROM orders
-      ORDER BY created_at DESC, id DESC
-      LIMIT 50
-    `).all<OrderRow>();
+      WHERE (? IS NULL OR strftime('%Y-%m', created_at, '+8 hours') = ?)
+      ORDER BY created_at ${isFinance ? 'ASC' : 'DESC'}, id ${isFinance ? 'ASC' : 'DESC'}
+      LIMIT 50 OFFSET ${isFinance ? (page - 1) * 50 : 0}
+    `).bind(month ?? null, month ?? null).all<OrderRow>();
 
-    // 最近 50 筆訂單依下單時間由舊到新顯示。
-    const orders = ordersResult.results.reverse();
+    // 櫃台取最近 50 筆；財務可翻閱全部歷史，皆由舊到新顯示。
+    const orders = isFinance ? ordersResult.results : ordersResult.results.reverse();
 
     if (orders.length === 0) {
       c.header('Cache-Control', 'no-store');
-      return c.json({ success: true, data: [] });
+      return c.json({ success: true, data: [], pagination });
     }
 
     const placeholders = orders.map(() => '?').join(',');
@@ -708,6 +754,7 @@ app.get('/api/admin/orders', async (c) => {
     return c.json({
       success: true,
       data,
+      pagination,
     });
   } catch (error) {
     console.error('Admin orders query failed:', error);

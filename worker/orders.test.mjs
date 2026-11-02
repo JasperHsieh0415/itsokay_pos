@@ -373,3 +373,138 @@ test('custom discounts reject invalid, unauthorized, stale, excessive and closed
     assert.equal(sqlite.prepare('SELECT total_amount FROM orders').get().total_amount, 130);
   }
 });
+test('finance history paginates all orders oldest first without changing the recent admin list', async (t) => {
+  const { sqlite, request, get } = setup(t);
+  const insert = sqlite.prepare("INSERT INTO orders (id, order_number, dining_mode, status, total_amount, custom_discount_amount, created_at) VALUES (?, ?, 'takeout', ?, 120, 10, ?)");
+  const statuses = ['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled'];
+  for (let index = 0; index < 52; index++) {
+    const id = 'history-' + String(index).padStart(3, '0');
+    const createdAt = '2025-01-01 00:00:' + String(index).padStart(2, '0');
+    insert.run(id, id, statuses[index % statuses.length], createdAt);
+    sqlite.prepare("INSERT INTO order_items (id, order_id, product_code, product_name, quantity, unit_price, line_total) VALUES (?, ?, 'PLAIN', '一般餐點', 1, 150, 150)").run(id + '-item', id);
+  }
+  sqlite.prepare("INSERT INTO order_item_options (id, order_item_id, group_id, option_id, option_name) VALUES ('history-option', 'history-000-item', 'custom', 'saved', '歷史選項')").run();
+  const history = async (page) => {
+    const response = await request('/api/admin/finance/orders?page=' + page, {
+      headers: { Authorization: 'Bearer admin-test' },
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    return response.json();
+  };
+  const first = await history(1);
+  assert.deepEqual(first.pagination, { page: 1, page_size: 50, total: 52 });
+  assert.equal(first.data.length, 50);
+  assert.equal(first.data[0].id, 'history-000');
+  assert.equal(first.data[49].id, 'history-049');
+  assert.equal(first.data[0].subtotal_amount, 150);
+  assert.equal(first.data[0].discount_amount, 20);
+  assert.equal(first.data[0].custom_discount_amount, 10);
+  assert.equal(first.data[0].total_amount, 120);
+  assert.equal(first.data[0].items[0].selected_options[0].option_name, '歷史選項');
+  assert.deepEqual([...new Set(first.data.map((order) => order.status))], statuses);
+  const second = await history(2);
+  assert.deepEqual(second.data.map((order) => order.id), ['history-050', 'history-051']);
+  const recent = (await (await get('admin')).json()).data;
+  assert.equal(recent.length, 50);
+  assert.equal(recent[0].id, 'history-002');
+  assert.equal(recent[49].id, 'history-051');
+  const empty = await history(3);
+  assert.deepEqual(empty.data, []);
+  assert.equal(empty.pagination.total, 52);
+});
+
+test('finance history requires admin authorization and validates pagination, including empty history', async (t) => {
+  const { request } = setup(t);
+  for (const headers of [{}, { Authorization: 'Bearer chef-test' }, { Authorization: 'Bearer incorrect' }]) {
+    assert.equal((await request('/api/admin/finance/orders', { headers })).status, 401);
+  }
+  const headers = { Authorization: 'Bearer admin-test' };
+  const emptyResponse = await request('/api/admin/finance/orders', { headers });
+  assert.equal(emptyResponse.status, 200);
+  const empty = await emptyResponse.json();
+  assert.deepEqual(empty.data, []);
+  assert.deepEqual(empty.pagination, { page: 1, page_size: 50, total: 0 });
+  for (const page of ['0', '-1', '1.5', 'abc', '1e2', '9007199254740991', '']) {
+    assert.equal((await request('/api/admin/finance/orders?page=' + page, { headers })).status, 400);
+  }
+});
+
+test('monthly income uses Taiwan calendar months, completed net amounts, and the immediately preceding month', async (t) => {
+  const { sqlite, request } = setup(t);
+  const insert = sqlite.prepare("INSERT INTO orders (id, order_number, dining_mode, status, total_amount, created_at) VALUES (?, ?, 'takeout', ?, ?, ?)");
+  const rows = [
+    ['dec-early', 'completed', 200, '2024-12-10 00:00:00'],
+    ['dec-end', 'completed', 100, '2024-12-31 15:59:59'],
+    ['jan-start', 'completed', 120, '2024-12-31 16:00:00'],
+    ['jan-other', 'completed', 330, '2025-01-20 00:00:00'],
+    ['jan-cancelled', 'cancelled', 900, '2025-01-20 00:00:00'],
+    ['jan-pending', 'pending', 800, '2025-01-20 00:00:00'],
+    ['feb', 'completed', 90, '2025-02-15 00:00:00'],
+    ['apr', 'completed', 50, '2025-04-15 00:00:00'],
+    ['may', 'completed', 0, '2025-05-15 00:00:00'],
+    ['jun', 'pending', 100, '2025-06-15 00:00:00'],
+  ];
+  for (const [id, status, total, created] of rows) insert.run(id, id, status, total, created);
+  const headers = { Authorization: 'Bearer admin-test' };
+  const response = await request('/api/admin/finance/months', { headers });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  const { data } = await response.json();
+  assert.deepEqual(data, [
+    { month: '2024-12', order_count: 2, completed_count: 2, total_income: 300, previous_month: '2024-11', previous_income: 0, change_percent: null },
+    { month: '2025-01', order_count: 4, completed_count: 2, total_income: 450, previous_month: '2024-12', previous_income: 300, change_percent: 50 },
+    { month: '2025-02', order_count: 1, completed_count: 1, total_income: 90, previous_month: '2025-01', previous_income: 450, change_percent: -80 },
+    { month: '2025-04', order_count: 1, completed_count: 1, total_income: 50, previous_month: '2025-03', previous_income: 0, change_percent: null },
+    { month: '2025-05', order_count: 1, completed_count: 1, total_income: 0, previous_month: '2025-04', previous_income: 50, change_percent: -100 },
+    { month: '2025-06', order_count: 1, completed_count: 0, total_income: 0, previous_month: '2025-05', previous_income: 0, change_percent: null },
+  ]);
+  for (const [month, ids] of [
+    ['2024-12', ['dec-early', 'dec-end']],
+    ['2025-01', ['jan-start', 'jan-cancelled', 'jan-other', 'jan-pending']],
+    ['2025-03', []],
+  ]) {
+    const result = await request('/api/admin/finance/orders?month=' + month, { headers });
+    assert.equal(result.status, 200);
+    const body = await result.json();
+    assert.deepEqual(body.data.map((order) => order.id), ids);
+    assert.equal(body.pagination.total, ids.length);
+  }
+});
+
+test('monthly summaries include all pages, preserve saved net revenue, and paginate only the selected month', async (t) => {
+  const { sqlite, request, post } = setup(t);
+  const created = (await (await post([
+    { product_code: 'M005', quantity: 1 },
+    { product_code: 'M036', quantity: 1, selected_options: [option('Hot', 'temp')] },
+  ])).json()).data;
+  sqlite.prepare("UPDATE orders SET status = 'completed', total_amount = 350, custom_discount_amount = 20, created_at = '2025-01-15 00:00:00' WHERE id = ?").run(created.order_id);
+  const insert = sqlite.prepare("INSERT INTO orders (id, order_number, dining_mode, status, total_amount, created_at) VALUES (?, ?, 'takeout', 'completed', 100, ?)");
+  for (let index = 0; index < 51; index++) insert.run('jan-' + index, 'jan-' + index, '2025-01-20 00:00:00');
+  insert.run('feb-order', 'feb-order', '2025-02-20 00:00:00');
+  const headers = { Authorization: 'Bearer admin-test' };
+  const summary = (await (await request('/api/admin/finance/months', { headers })).json()).data[0];
+  assert.equal(summary.order_count, 52);
+  assert.equal(summary.completed_count, 52);
+  assert.equal(summary.total_income, 5450);
+  const secondPage = await request('/api/admin/finance/orders?month=2025-01&page=2', { headers });
+  assert.equal(secondPage.status, 200);
+  const result = await secondPage.json();
+  assert.equal(result.data.length, 2);
+  assert.equal(result.pagination.total, 52);
+  assert.ok(result.data.every((order) => order.id.startsWith('jan-')));
+});
+
+test('monthly summaries require admin access and month filters reject invalid input', async (t) => {
+  const { request } = setup(t);
+  for (const headers of [{}, { Authorization: 'Bearer chef-test' }]) {
+    assert.equal((await request('/api/admin/finance/months', { headers })).status, 401);
+  }
+  const headers = { Authorization: 'Bearer admin-test' };
+  const response = await request('/api/admin/finance/months', { headers });
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).data, []);
+  for (const month of ['', '2025', '2025-00', '2025-13', '2025-1', '2025-01-01', '0000-01', "2025-01' OR 1=1"]) {
+    assert.equal((await request('/api/admin/finance/orders?month=' + encodeURIComponent(month), { headers })).status, 400);
+  }
+});
