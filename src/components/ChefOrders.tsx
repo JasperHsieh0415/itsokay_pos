@@ -129,7 +129,7 @@ export default function ChefOrders() {
 
     const timer = window.setInterval(() => {
       loadOrders(controller.signal);
-    }, 5000);
+    }, 10000);
 
     return () => {
       invalidateRequests();

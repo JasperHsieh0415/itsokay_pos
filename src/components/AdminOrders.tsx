@@ -174,7 +174,7 @@ export default function AdminOrders({ initialFinance = false }: { initialFinance
       if (document.visibilityState === 'visible') {
         loadOrders(controller.signal);
       }
-    }, 5000);
+    }, 10000);
 
     return () => {
       invalidateRequests();
@@ -345,7 +345,7 @@ export default function AdminOrders({ initialFinance = false }: { initialFinance
       <header className="admin-header">
         <div>
           <h1>It's okay · 訂單管理</h1>
-          <p>Order Management · 每 5 秒自動更新</p>
+          <p>Order Management · 每 10 秒自動更新</p>
         </div>
         <div className="admin-actions">
           <button type="button" onClick={() => navigate('/admin/finance')}>財務管理</button>
