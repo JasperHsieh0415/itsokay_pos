@@ -45,6 +45,8 @@ function formatTime(value: string): string {
 
 export default function ChefOrders() {
   const [keyInput, setKeyInput] = useState('');
+  const [loginBusy, setLoginBusy] = useState(false);
+  const loginPending = useRef(false);
   const [chefKey, setChefKey] = useState('');
 
   const [items, setItems] = useState<ChefItem[]>([]);
@@ -79,7 +81,7 @@ export default function ChefOrders() {
 
       if (response.status === 401) {
         if (!signal?.aborted) {
-          setError('Chef 密鑰錯誤或已失效');
+          setError('登入已失效，請重新輸入密碼');
           resetOrderSound();
           setChefKey('');
           setItems([]);
@@ -220,6 +222,34 @@ export default function ChefOrders() {
     }
   };
 
+  const login = async () => {
+    if (loginPending.current || !keyInput) return;
+    loginPending.current = true;
+    setLoginBusy(true);
+    setError('');
+    resetOrderSound();
+    void sound.enable(false);
+    try {
+      const response = await fetch('/api/auth/chef/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: keyInput }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success || typeof result.data?.token !== 'string') {
+        throw new Error(result.error ?? '登入失敗，請稍後重試');
+      }
+      setChefKey(result.data.token);
+      setKeyInput('');
+    } catch (err) {
+      resetOrderSound();
+      setError(err instanceof Error ? err.message : '登入失敗，請稍後重試');
+    } finally {
+      loginPending.current = false;
+      setLoginBusy(false);
+    }
+  };
+
   if (!chefKey) {
     return (
       <main className="chef-login">
@@ -227,11 +257,7 @@ export default function ChefOrders() {
           className="chef-login-card"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!keyInput.trim()) return;
-            setError('');
-            resetOrderSound();
-            setChefKey(keyInput.trim());
-            setKeyInput('');
+            void login();
           }}
         >
           <h1>It's okay</h1>
@@ -242,17 +268,20 @@ export default function ChefOrders() {
 
           <input
             type="password"
+            maxLength={1153}
+            disabled={loginBusy}
+            aria-label="廚房管理密碼"
             value={keyInput}
             onChange={(event) =>
               setKeyInput(event.target.value)
             }
-            placeholder="Chef 管理密鑰"
-            autoComplete="off"
+            placeholder="廚房管理密碼"
+            autoComplete="current-password"
             required
           />
 
-          <button type="submit">
-            進入廚房系統
+          <button type="submit" disabled={loginBusy}>
+            {loginBusy ? '登入中…' : '進入廚房系統'}
           </button>
         </form>
       </main>

@@ -81,7 +81,7 @@ export default function useOrderSound(scope: 'admin' | 'chef') {
     }
   }, [closeAudio, playSelected]);
 
-  const unlockAudio = useCallback(async (enableNotifications: boolean) => {
+  const unlockAudio = useCallback(async (enableNotifications: boolean, preview = true) => {
     const currentAttempt = ++attempt.current;
     enabled.current = false;
     closeAudio();
@@ -99,7 +99,7 @@ export default function useOrderSound(scope: 'admin' | 'chef') {
         }),
       ]);
       if (attempt.current !== currentAttempt) return;
-      playSelected(context);
+      if (preview) playSelected(context);
       enabled.current = enableNotifications;
       setStatus(enableNotifications ? 'on' : 'off');
       context.onstatechange = () => {
@@ -119,7 +119,7 @@ export default function useOrderSound(scope: 'admin' | 'chef') {
     }
   }, [closeAudio, playSelected]);
 
-  const enable = useCallback(() => unlockAudio(true), [unlockAudio]);
+  const enable = useCallback((preview = true) => unlockAudio(true, preview), [unlockAudio]);
 
   const selectSound = useCallback((soundId: OrderSoundId) => {
     selected.current = soundId;

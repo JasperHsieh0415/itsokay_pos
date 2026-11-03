@@ -1,12 +1,14 @@
 
 import { Hono } from 'hono';
+import { createAdminSession, hashPassword, loadAdmin, loadUser, loadSessionUser, validPassword, verifyAdminSession, verifyPassword, type AdminUser } from './adminAuth.ts';
 import { resolveOrderOptions, type OrderOption } from './orderOptions.ts';
 import { calculateMealDrinkDiscount } from '../src/data/orderDiscount.ts';
 
 type Bindings = {
   DB: D1Database;
   ADMIN_API_KEY: string;
-  CHEF_API_KEY: string;
+  DEVELOPER_USERNAME?: string;
+  DEVELOPER_PASSWORD?: string;
 };
 
 type OrderStatus =
@@ -17,7 +19,7 @@ type OrderStatus =
   | 'completed'
   | 'cancelled';
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<{ Bindings: Bindings; Variables: { adminUser: AdminUser } }>();
 
 app.get('/api/health', (c) => {
   return c.json({
@@ -501,56 +503,126 @@ const NEXT_STATUS: Record<OrderStatus, OrderStatus[]> = {
   cancelled: [],
 };
 
-// 管理 API 身分驗證
+// Both staff portals share the saved admin password. Developer login has no visible UI entry.
+app.post('/api/auth/:scope/login', async (c) => {
+  c.header('Cache-Control', 'no-store');
+  const scope = c.req.param('scope');
+  if (scope !== 'admin' && scope !== 'chef') return c.json({ success: false, error: 'Not found' }, 404);
+  if (!c.env.ADMIN_API_KEY) return c.json({ success: false, error: 'Admin API not configured' }, 503);
+  let body: unknown;
+  try { body = await c.req.json(); }
+  catch { return c.json({ success: false, error: '請輸入有效的登入資料' }, 400); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return c.json({ success: false, error: '請輸入有效的登入資料' }, 400);
+  const { password: credential, username: suppliedUsername } = body as Record<string, unknown>;
+  if (typeof credential !== 'string' || !credential || credential.length > 1153) {
+    return c.json({ success: false, error: '登入資料格式不正確' }, 400);
+  }
+  if (suppliedUsername !== undefined && (typeof suppliedUsername !== 'string' || suppliedUsername.length > 128)) {
+    return c.json({ success: false, error: '登入資料格式不正確' }, 400);
+  }
+  try {
+    let user: AdminUser | null = null;
+    let username = typeof suppliedUsername === 'string' ? suppliedUsername.trim() : '';
+    let password = credential;
+    if (!username || username === 'admin' || username === 'chef') {
+      let admin = await loadAdmin(c.env.DB);
+      if (!admin && validPassword(credential) && credential === c.env.ADMIN_API_KEY) {
+        const hash = await hashPassword(credential);
+        await c.env.DB.prepare("INSERT INTO users (id, username, password_hash, role) VALUES (?, 'admin', ?, 'admin') ON CONFLICT(username) DO NOTHING")
+          .bind(crypto.randomUUID(), hash).run();
+        admin = await loadAdmin(c.env.DB);
+      }
+      // Test the complete password first, so ordinary passwords may contain colons.
+      if (admin?.role === 'admin' && admin.active === 1 && validPassword(credential) && await verifyPassword(credential, admin.password_hash)) {
+        user = admin;
+      }
+      const separator = credential.indexOf(':');
+      username = separator > 0 ? credential.slice(0, separator).trim() : '';
+      password = separator > 0 ? credential.slice(separator + 1) : '';
+    }
+    if (!user && username && username.length <= 128 && username !== 'admin' && username !== 'chef' && validPassword(password)) {
+      let developer = await loadUser(c.env.DB, username);
+      if (!developer && username === c.env.DEVELOPER_USERNAME && validPassword(c.env.DEVELOPER_PASSWORD) && password === c.env.DEVELOPER_PASSWORD) {
+        const hash = await hashPassword(password);
+        await c.env.DB.prepare("INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, 'developer') ON CONFLICT DO NOTHING")
+          .bind(crypto.randomUUID(), username, hash).run();
+        developer = await loadUser(c.env.DB, username);
+      }
+      if (developer?.role === 'developer' && developer.active === 1 && await verifyPassword(password, developer.password_hash)) user = developer;
+    }
+    if (!user) return c.json({ success: false, error: '密碼不正確或帳號已停用' }, 401);
+    return c.json({ success: true, data: { token: await createAdminSession(user, c.env.ADMIN_API_KEY, scope) } });
+  } catch (error) {
+    console.error('Staff login failed:', error);
+    return c.json({ success: false, error: '登入失敗，請稍後重試' }, 500);
+  }
+});
+
 app.use('/api/admin/*', async (c, next) => {
-  const configuredKey = c.env.ADMIN_API_KEY;
+  c.header('Cache-Control', 'no-store');
+  const secret = c.env.ADMIN_API_KEY;
   const supplied = c.req.header('Authorization');
-
-  if (!configuredKey) {
-    return c.json(
-      { success: false, error: 'Admin API not configured' },
-      503
-    );
+  if (!secret) return c.json({ success: false, error: 'Admin API not configured' }, 503);
+  if (!supplied?.startsWith('Bearer ')) return c.json({ success: false, error: 'Unauthorized' }, 401);
+  try {
+    const token = supplied.slice(7);
+    const user = await loadSessionUser(c.env.DB, token);
+    if (!user || !await verifyAdminSession(token, user, secret, ['admin', 'developer'], 'admin')) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401);
+    }
+    c.set('adminUser', user);
+  } catch (error) {
+    console.error('Admin authentication failed:', error);
+    return c.json({ success: false, error: '驗證失敗，請稍後重試' }, 503);
   }
-
-  if (supplied !== `Bearer ${configuredKey}`) {
-    return c.json(
-      { success: false, error: 'Unauthorized' },
-      401
-    );
-  }
-
   await next();
 });
 
-// Chef API 身分驗證
+app.patch('/api/admin/account/password', async (c) => {
+  const user = c.get('adminUser');
+  if (!user) return c.json({ success: false, error: '請重新登入後修改密碼' }, 401);
+  let body: unknown;
+  try { body = await c.req.json(); }
+  catch { return c.json({ success: false, error: '密碼資料格式不正確' }, 400); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return c.json({ success: false, error: '密碼資料格式不正確' }, 400);
+  const { current_password, new_password, confirm_password } = body as Record<string, unknown>;
+  if (!validPassword(current_password) || !validPassword(new_password) || !validPassword(confirm_password)) {
+    return c.json({ success: false, error: '請填寫所有密碼欄位（最多 1024 字元）' }, 400);
+  }
+  if (new_password !== confirm_password) return c.json({ success: false, error: '新密碼與確認新密碼不一致' }, 400);
+  try {
+    if (!await verifyPassword(current_password, user.password_hash)) return c.json({ success: false, error: '目前密碼不正確' }, 400);
+    const hash = await hashPassword(new_password);
+    const updated = await c.env.DB.prepare(`
+      UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND password_hash = ? AND role IN ('admin', 'developer') AND active = 1 RETURNING id
+    `).bind(hash, user.id, user.password_hash).first<{ id: string }>();
+    if (!updated) return c.json({ success: false, error: '帳號資料已變更，請重新登入' }, 409);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('Password update failed:', error);
+    return c.json({ success: false, error: '修改密碼失敗，請稍後重試' }, 500);
+  }
+});
+
+// Normal chef sessions use the shared password but remain restricted to kitchen APIs.
 app.use('/api/chef/*', async (c, next) => {
-  const configuredKey = c.env.CHEF_API_KEY;
+  c.header('Cache-Control', 'no-store');
   const supplied = c.req.header('Authorization');
-
-  if (!configuredKey) {
-    return c.json(
-      {
-        success: false,
-        error: 'Chef API not configured',
-      },
-      503
-    );
+  if (!c.env.ADMIN_API_KEY) return c.json({ success: false, error: 'Admin API not configured' }, 503);
+  if (!supplied?.startsWith('Bearer ')) return c.json({ success: false, error: 'Unauthorized' }, 401);
+  try {
+    const token = supplied.slice(7);
+    const user = await loadSessionUser(c.env.DB, token);
+    if (!user || !await verifyAdminSession(token, user, c.env.ADMIN_API_KEY, ['admin', 'developer'], 'chef')) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401);
+    }
+  } catch (error) {
+    console.error('Chef authentication failed:', error);
+    return c.json({ success: false, error: '驗證失敗，請稍後重試' }, 503);
   }
-
-  if (supplied !== `Bearer ${configuredKey}`) {
-    return c.json(
-      {
-        success: false,
-        error: 'Unauthorized',
-      },
-      401
-    );
-  }
-
   await next();
 });
-
 
 // 只修改這筆訂單中的時價明細，不變更菜單商品價格。
 app.patch('/api/admin/orders/:id/items/:itemId/price', async (c) => {

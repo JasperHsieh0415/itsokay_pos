@@ -6,6 +6,7 @@ import OrderSoundControls from './OrderSoundControls';
 import AdminOrderItemPrice from './AdminOrderItemPrice';
 import AdminOrderDiscount from './AdminOrderDiscount';
 import AdminFinance from './AdminFinance';
+import AdminAccountSettings from './AdminAccountSettings';
 
 type OrderStatus =
   | 'pending'
@@ -81,19 +82,24 @@ function getOrderDay(value: string | Date) {
 }
 
 export default function AdminOrders({ initialFinance = false }: { initialFinance?: boolean }) {
-  const [finance, setFinance] = useState(initialFinance);
+  const getView = () => window.location.pathname.replace(/\/+$/, '') === '/admin/account' ? 'account' : window.location.pathname.replace(/\/+$/, '') === '/admin/finance' ? 'finance' : 'orders';
+  const [view, setView] = useState(() => initialFinance ? 'finance' : getView());
+  const finance = view === 'finance';
   useEffect(() => {
-    const onPopState = () => setFinance(window.location.pathname.replace(/\/+$/, '') === '/admin/finance');
+    const onPopState = () => setView(getView());
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
-  const navigate = (path: '/admin' | '/admin/finance') => {
+  const navigate = (path: '/admin' | '/admin/finance' | '/admin/account') => {
     window.history.pushState(null, '', path);
-    setFinance(path === '/admin/finance');
+    setView(path === '/admin/account' ? 'account' : path === '/admin/finance' ? 'finance' : 'orders');
     window.scrollTo(0, 0);
   };
   const [keyInput, setKeyInput] = useState('');
   const [adminKey, setAdminKey] = useState('');
+  const [loginBusy, setLoginBusy] = useState(false);
+  const loginPending = useRef(false);
+  const [notice, setNotice] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
   const [today, setToday] = useState(() => getOrderDay(new Date()));
   const [loading, setLoading] = useState(false);
@@ -124,7 +130,7 @@ export default function AdminOrders({ initialFinance = false }: { initialFinance
       if (isStale()) return;
 
       if (response.status === 401) {
-        setError('管理密鑰不正確');
+        setError('登入已失效，請重新輸入密碼');
         resetOrderSound();
         setAdminKey('');
         setOrders([]);
@@ -278,6 +284,45 @@ export default function AdminOrders({ initialFinance = false }: { initialFinance
     }
   };
 
+  const logout = () => {
+    invalidateRequests();
+    resetOrderSound();
+    setAdminKey('');
+    setOrders([]);
+    setError('');
+    setNotice('');
+  };
+
+  const login = async () => {
+    if (loginPending.current || !keyInput) return;
+    loginPending.current = true;
+    setLoginBusy(true);
+    setError('');
+    setNotice('');
+    resetOrderSound();
+    // Unlock audio within the login gesture, before awaiting authentication.
+    void sound.enable(false);
+    try {
+      const response = await fetch('/api/auth/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: keyInput }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success || typeof result.data?.token !== 'string') {
+        throw new Error(result.error ?? '登入失敗，請稍後重試');
+      }
+      setAdminKey(result.data.token);
+      setKeyInput('');
+    } catch (err) {
+      resetOrderSound();
+      setError(err instanceof Error ? err.message : '登入失敗，請稍後重試');
+    } finally {
+      loginPending.current = false;
+      setLoginBusy(false);
+    }
+  };
+
   if (!adminKey) {
     return (
       <main className="admin-login">
@@ -285,41 +330,49 @@ export default function AdminOrders({ initialFinance = false }: { initialFinance
           className="admin-login-card"
           onSubmit={(event) => {
             event.preventDefault();
-            if (keyInput.trim()) {
-              resetOrderSound();
-              setAdminKey(keyInput.trim());
-              setKeyInput('');
-            }
+            void login();
           }}
         >
           <h1>It's okay</h1>
           <h2>{finance ? '財務管理' : '櫃台訂單管理'}</h2>
-          <p>請輸入管理密鑰</p>
+          <p>請輸入管理密碼</p>
+          {notice && <p role="status">{notice}</p>}
           {error && <p role="alert">{error}</p>}
           <input
             type="password"
-            autoComplete="off"
+            autoComplete="current-password"
+            maxLength={1153}
+            disabled={loginBusy}
+            aria-label="管理密碼"
             value={keyInput}
             onChange={(event) => setKeyInput(event.target.value)}
-            placeholder="管理密鑰"
+            placeholder="管理密碼"
             required
           />
-          <button type="submit">進入管理頁</button>
+          <button type="submit" disabled={loginBusy}>{loginBusy ? '登入中…' : '進入管理頁'}</button>
         </form>
       </main>
     );
+  }
+
+  if (view === 'account') {
+    return <AdminAccountSettings
+      adminKey={adminKey}
+      onBack={() => navigate('/admin')}
+      onLogout={logout}
+      onPasswordChanged={() => {
+        logout();
+        setNotice('密碼已修改，請使用新密碼重新登入。');
+      }}
+    />;
   }
 
   if (finance) {
     return <AdminFinance
       adminKey={adminKey}
       onBack={() => navigate('/admin')}
-      onLogout={() => {
-        invalidateRequests();
-        resetOrderSound();
-        setAdminKey('');
-        setOrders([]);
-      }}
+      onAccount={() => navigate('/admin/account')}
+      onLogout={logout}
     />;
   }
 
@@ -348,17 +401,14 @@ export default function AdminOrders({ initialFinance = false }: { initialFinance
           <p>Order Management · 每 10 秒自動更新</p>
         </div>
         <div className="admin-actions">
+          <button type="button" onClick={() => navigate('/admin/account')}>帳號設定</button>
           <button type="button" onClick={() => navigate('/admin/finance')}>財務管理</button>
           <OrderSoundControls sound={sound} />
           <button onClick={() => loadOrders()}>
             重新整理
           </button>
           <button
-            onClick={() => {
-              resetOrderSound();
-              setAdminKey('');
-              setOrders([]);
-            }}
+            onClick={logout}
           >
             登出
           </button>

@@ -10,7 +10,7 @@ const path =
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {path === '/admin' || path === '/admin/finance' ? (
+    {path === '/admin' || path === '/admin/finance' || path === '/admin/account' ? (
       <AdminOrders initialFinance={path === '/admin/finance'} />
     ) : path === '/chef' ? (
       <ChefOrders />

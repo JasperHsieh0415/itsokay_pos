@@ -248,8 +248,9 @@ function MonthlyOverview({ adminKey, onLogout, onRetry }: {
   );
 }
 
-export default function AdminFinance({ adminKey, onBack, onLogout }: {
+export default function AdminFinance({ adminKey, onBack, onLogout, onAccount }: {
   adminKey: string;
+  onAccount: () => void;
   onBack: () => void;
   onLogout: () => void;
 }) {
@@ -263,6 +264,7 @@ export default function AdminFinance({ adminKey, onBack, onLogout }: {
           <p>每月收入統計 · 展開月份查看歷史訂單</p>
         </div>
         <div className="admin-actions">
+          <button type="button" onClick={onAccount}>帳號設定</button>
           <button type="button" onClick={onBack}>返回訂單管理</button>
           <button type="button" onClick={reload}>重新整理</button>
           <button type="button" onClick={onLogout}>登出</button>

@@ -8,7 +8,7 @@ import app from './index.ts';
 function setup(t) {
   const sqlite = new DatabaseSync(':memory:');
   t.after(() => sqlite.close());
-  for (const file of ['0001_init.sql', '0002_add_menu_categories.sql', '0003_create_orders.sql', '0004_add_kitchen_workflow.sql', '0005_add_custom_discount.sql']) {
+  for (const file of ['0001_init.sql', '0002_add_menu_categories.sql', '0003_create_orders.sql', '0004_add_kitchen_workflow.sql', '0005_add_custom_discount.sql', '0006_create_users.sql', '0007_add_developer_role.sql']) {
     sqlite.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
   }
   sqlite.exec(`INSERT INTO products (id, product_code, name, price, station) VALUES
@@ -38,15 +38,33 @@ function setup(t) {
     } },
     ADMIN_API_KEY: 'admin-test', CHEF_API_KEY: 'chef-test',
   };
+  const sessions = {};
+  async function authenticatedRequest(path, options = {}) {
+    const headers = new Headers(options.headers);
+    const authorization = headers.get('Authorization');
+    const scope = authorization === 'Bearer admin-test' ? 'admin' : authorization === 'Bearer chef-test' ? 'chef' : null;
+    if (scope) {
+      sessions[scope] ??= (async () => {
+        const response = await app.request(`/api/auth/${scope}/login`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: env.ADMIN_API_KEY }),
+        }, env);
+        assert.equal(response.status, 200);
+        return (await response.json()).data.token;
+      })();
+      headers.set('Authorization', `Bearer ${await sessions[scope]}`);
+    }
+    return app.request(path, { ...options, headers }, env);
+  }
   return {
     sqlite,
-    request(path, options) { return app.request(path, options, env); },
+    request: authenticatedRequest,
     patch(path, body, role = 'admin') {
-      return app.request(path, {
+      return authenticatedRequest(path, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env[`${role.toUpperCase()}_API_KEY`]}` },
         body: JSON.stringify(body),
-      }, env);
+      });
     },
     post(items) {
       return app.request('/api/orders', {
@@ -55,9 +73,9 @@ function setup(t) {
       }, env);
     },
     get(role) {
-      return app.request(`/api/${role}/orders`, {
+      return authenticatedRequest(`/api/${role}/orders`, {
         headers: { Authorization: `Bearer ${env[`${role.toUpperCase()}_API_KEY`]}` },
-      }, env);
+      });
     },
   };
 }
