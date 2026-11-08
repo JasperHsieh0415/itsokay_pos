@@ -54,7 +54,12 @@ const drinkOptions = [
   { id: 9, name: '茶品', english_name: 'Tea' },
 ];
 
-function App() {
+type AppProps = {
+  onReturnToOrders?: () => void;
+  onSubmittingChange?: (submitting: boolean) => void;
+};
+
+function App({ onReturnToOrders, onSubmittingChange }: AppProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
@@ -364,6 +369,7 @@ const groupedProducts = useMemo(() => {
     }
 
     setSubmittingOrder(true);
+    onSubmittingChange?.(true);
     setOrderError(null);
     setCreatedOrderNumber(null);
 
@@ -412,6 +418,7 @@ const groupedProducts = useMemo(() => {
       );
     } finally {
       setSubmittingOrder(false);
+      onSubmittingChange?.(false);
     }
   };
 
@@ -468,6 +475,11 @@ const groupedProducts = useMemo(() => {
           >
             ＋ 開始新訂單
           </button>
+          {onReturnToOrders && (
+            <button type="button" className="new-order-button" onClick={onReturnToOrders}>
+              返回訂單管理
+            </button>
+          )}
         </div>
       </div>
     );

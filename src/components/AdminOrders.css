@@ -522,3 +522,33 @@
 .admin-discount-controls .admin-discount-cancel { background: #eee7dd; color: #493c32; }
 .admin-discount-controls button:disabled { opacity: .55; cursor: not-allowed; }
 .admin-discount-error { color: #a34e41; font-size: 14px; }
+
+.admin-actions .admin-new-order {
+  background: #79543d;
+  border-color: #79543d;
+  color: #fff;
+  font-weight: 700;
+}
+
+.admin-create-order {
+  min-height: 100vh;
+  background: #f8f5ef;
+  color: #46372e;
+}
+
+.admin-create-order-header {
+  margin: 0;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e9dfd2;
+}
+
+.admin-create-order .entry-page,
+.admin-create-order .cafe-seat-page,
+.admin-create-order .pos-page,
+.admin-create-order .order-success-page {
+  min-height: calc(100vh - 90px);
+}
+
+.admin-create-order .new-order-button + .new-order-button {
+  margin-top: 12px;
+}

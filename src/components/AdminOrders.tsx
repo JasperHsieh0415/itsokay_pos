@@ -7,6 +7,7 @@ import AdminOrderItemPrice from './AdminOrderItemPrice';
 import AdminOrderDiscount from './AdminOrderDiscount';
 import AdminFinance from './AdminFinance';
 import AdminAccountSettings from './AdminAccountSettings';
+import App from '../App';
 
 type OrderStatus =
   | 'pending'
@@ -82,7 +83,7 @@ function getOrderDay(value: string | Date) {
 }
 
 export default function AdminOrders({ initialFinance = false }: { initialFinance?: boolean }) {
-  const getView = () => window.location.pathname.replace(/\/+$/, '') === '/admin/account' ? 'account' : window.location.pathname.replace(/\/+$/, '') === '/admin/finance' ? 'finance' : 'orders';
+  const getView = () => window.location.pathname.replace(/\/+$/, '') === '/admin/order' ? 'new-order' : window.location.pathname.replace(/\/+$/, '') === '/admin/account' ? 'account' : window.location.pathname.replace(/\/+$/, '') === '/admin/finance' ? 'finance' : 'orders';
   const [view, setView] = useState(() => initialFinance ? 'finance' : getView());
   const finance = view === 'finance';
   useEffect(() => {
@@ -90,14 +91,15 @@ export default function AdminOrders({ initialFinance = false }: { initialFinance
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
-  const navigate = (path: '/admin' | '/admin/finance' | '/admin/account') => {
+  const navigate = (path: '/admin' | '/admin/finance' | '/admin/account' | '/admin/order') => {
     window.history.pushState(null, '', path);
-    setView(path === '/admin/account' ? 'account' : path === '/admin/finance' ? 'finance' : 'orders');
+    setView(path === '/admin/order' ? 'new-order' : path === '/admin/account' ? 'account' : path === '/admin/finance' ? 'finance' : 'orders');
     window.scrollTo(0, 0);
   };
   const [keyInput, setKeyInput] = useState('');
   const [adminKey, setAdminKey] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
+  const [creatingOrder, setCreatingOrder] = useState(false);
   const loginPending = useRef(false);
   const [notice, setNotice] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
@@ -355,6 +357,27 @@ export default function AdminOrders({ initialFinance = false }: { initialFinance
     );
   }
 
+  if (view === 'new-order') {
+    const returnToOrders = () => {
+      if (creatingOrder) return;
+      navigate('/admin');
+      void loadOrders();
+    };
+    return (
+      <div className="admin-create-order">
+        <header className="admin-header admin-create-order-header">
+          <div><h1>新增訂單</h1><p>選擇內用或外帶，即可開始點餐。</p></div>
+          <div className="admin-actions">
+            <button type="button" disabled={creatingOrder} onClick={returnToOrders}>
+              {creatingOrder ? '訂單送出中…' : '返回訂單管理'}
+            </button>
+          </div>
+        </header>
+        <App onReturnToOrders={returnToOrders} onSubmittingChange={setCreatingOrder} />
+      </div>
+    );
+  }
+
   if (view === 'account') {
     return <AdminAccountSettings
       adminKey={adminKey}
@@ -402,6 +425,7 @@ export default function AdminOrders({ initialFinance = false }: { initialFinance
           <p>Order Management · 每 10 秒自動更新</p>
         </div>
         <div className="admin-actions">
+          <button type="button" className="admin-new-order" onClick={() => navigate('/admin/order')}>＋ 新增訂單</button>
           <button type="button" onClick={() => navigate('/admin/account')}>帳號設定</button>
           <button type="button" onClick={() => navigate('/admin/finance')}>財務管理</button>
           <OrderSoundControls sound={sound} />
