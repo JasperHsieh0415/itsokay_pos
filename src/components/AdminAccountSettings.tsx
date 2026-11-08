@@ -10,7 +10,6 @@ type Props = {
 };
 
 export default function AdminAccountSettings({ adminKey, onBack, onLogout, onPasswordChanged }: Props) {
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [saving, setSaving] = useState(false);
@@ -31,12 +30,11 @@ export default function AdminAccountSettings({ adminKey, onBack, onLogout, onPas
       const response = await fetch('/api/admin/account/password', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
-        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword, confirm_password: confirmation }),
+        body: JSON.stringify({ new_password: newPassword, confirm_password: confirmation }),
       });
       if (response.status === 401) { onLogout(); return; }
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error ?? '修改密碼失敗，請稍後重試');
-      setCurrentPassword('');
       setNewPassword('');
       setConfirmation('');
       onPasswordChanged();
@@ -61,9 +59,6 @@ export default function AdminAccountSettings({ adminKey, onBack, onLogout, onPas
         <h2>修改密碼</h2>
         <p>新密碼不限制複雜度；修改後請重新登入。</p>
         {error && <div className="admin-error" role="alert">{error}</div>}
-        <label htmlFor="current-password">目前密碼</label>
-        <input id="current-password" name="current_password" type="password" autoComplete="current-password" required maxLength={1024}
-          value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} disabled={saving} />
         <label htmlFor="new-password">新密碼</label>
         <input id="new-password" name="new_password" type="password" autoComplete="new-password" required maxLength={1024}
           value={newPassword} onChange={(event) => setNewPassword(event.target.value)} disabled={saving} />

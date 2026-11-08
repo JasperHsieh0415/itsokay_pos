@@ -362,6 +362,7 @@ export default function AdminOrders({ initialFinance = false }: { initialFinance
       onLogout={logout}
       onPasswordChanged={() => {
         logout();
+        navigate('/admin');
         setNotice('密碼已修改，請使用新密碼重新登入。');
       }}
     />;

@@ -13,17 +13,18 @@ type DiningTable = {
 };
 
 const TABLES: DiningTable[] = [
-  // 左側：三張菱形桌
-  { id: 'T01', name: '左側第一桌', shape: 'diamond', x: 29, y: 19 },
-  { id: 'T02', name: '左側第二桌', shape: 'diamond', x: 29, y: 49 },
-  { id: 'T03', name: '左側第三桌', shape: 'diamond', x: 29, y: 79 },
+  // 左側：三張菱形桌，從前門往內依雙數遞增
+  { id: 'T02', name: '左側第一桌', shape: 'diamond', x: 29, y: 79 },
+  { id: 'T04', name: '左側第二桌', shape: 'diamond', x: 29, y: 49 },
+  { id: 'T06', name: '左側第三桌', shape: 'diamond', x: 29, y: 19 },
 
-  // 右側：五張方形桌
-  { id: 'T04', name: '右側第一桌', shape: 'square', x: 72, y: 12 },
-  { id: 'T05', name: '右側第二桌', shape: 'square', x: 72, y: 30 },
-  { id: 'T06', name: '右側第三桌', shape: 'square', x: 72, y: 48 },
-  { id: 'T07', name: '右側第四桌', shape: 'square', x: 72, y: 66 },
-  { id: 'T08', name: '右側第五桌', shape: 'square', x: 72, y: 84 },
+  // 右側：六張方形桌，從前門往內依單數遞增
+  { id: 'T01', name: '右側第一桌', shape: 'square', x: 72, y: 82 },
+  { id: 'T03', name: '右側第二桌', shape: 'square', x: 72, y: 68 },
+  { id: 'T05', name: '右側第三桌', shape: 'square', x: 72, y: 54 },
+  { id: 'T07', name: '右側第四桌', shape: 'square', x: 72, y: 40 },
+  { id: 'T09', name: '右側第五桌', shape: 'square', x: 72, y: 26 },
+  { id: 'T11', name: '右側第六桌', shape: 'square', x: 72, y: 12 },
 ];
 
 type Props = {

@@ -8,7 +8,7 @@ import app from './index.ts';
 function setup(t) {
   const sqlite = new DatabaseSync(':memory:');
   t.after(() => sqlite.close());
-  for (const file of ['0001_init.sql', '0002_add_menu_categories.sql', '0003_create_orders.sql', '0004_add_kitchen_workflow.sql', '0005_add_custom_discount.sql', '0006_create_users.sql', '0007_add_developer_role.sql']) {
+  for (const file of ['0001_init.sql', '0002_add_menu_categories.sql', '0003_create_orders.sql', '0004_add_kitchen_workflow.sql', '0005_add_custom_discount.sql', '0006_create_users.sql', '0007_add_developer_role.sql', '0008_expand_table_ids.sql']) {
     sqlite.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
   }
   sqlite.exec(`INSERT INTO products (id, product_code, name, price, station) VALUES
@@ -525,4 +525,44 @@ test('monthly summaries require admin access and month filters reject invalid in
   for (const month of ['', '2025', '2025-00', '2025-13', '2025-1', '2025-01-01', '0000-01', "2025-01' OR 1=1"]) {
     assert.equal((await request('/api/admin/finance/orders?month=' + encodeURIComponent(month), { headers })).status, 400);
   }
+});
+
+test('all selectable tables accept dine-in orders and removed or unknown tables reject', async (t) => {
+  const { request, sqlite } = setup(t);
+  for (const tableId of ['T01', 'T02', 'T03', 'T04', 'T05', 'T06', 'T07', 'T09', 'T11', 'T08', 'T10']) {
+    const response = await request('/api/orders', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dining_mode: 'dinein', table_id: tableId, items: [{ product_code: 'PLAIN', quantity: 1 }] }),
+    });
+    assert.equal(response.status, ['T08', 'T10'].includes(tableId) ? 400 : 201, tableId);
+  }
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM orders').get().count, 9);
+});
+
+test('table migration preserves historical orders, options, kitchen state and cascade behavior', (t) => {
+  const sqlite = new DatabaseSync(':memory:');
+  t.after(() => sqlite.close());
+  sqlite.exec('PRAGMA foreign_keys = ON');
+  for (const file of ['0001_init.sql', '0002_add_menu_categories.sql', '0003_create_orders.sql', '0004_add_kitchen_workflow.sql', '0005_add_custom_discount.sql']) {
+    sqlite.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
+  }
+  sqlite.exec(`
+    INSERT INTO products (id, product_code, name, price) VALUES (9999, 'TEST', 'Test', 100);
+    INSERT INTO orders (id, order_number, dining_mode, table_id, total_amount, custom_discount_amount)
+    VALUES ('old', 'OLD', 'dinein', 'T08', 95, 5);
+    INSERT INTO order_items (id, order_id, product_code, product_name, quantity, unit_price, line_total, station, kitchen_status, kitchen_started_at)
+    VALUES ('item', 'old', 'TEST', 'Test', 1, 100, 100, 'kitchen', 'preparing', '2026-11-08 01:00:00');
+    INSERT INTO order_item_options (id, order_item_id, group_id, option_id, option_name, price_delta)
+    VALUES ('option', 'item', 'extra', 'cheese', 'Cheese', 10);
+  `);
+  const tables = ['orders', 'order_items', 'order_item_options'];
+  const snapshot = () => tables.map((table) => sqlite.prepare(`SELECT * FROM ${table}`).all().map((row) => ({ ...row })));
+  const before = snapshot();
+  sqlite.exec('BEGIN');
+  sqlite.exec(readFileSync(new URL('../migrations/0008_expand_table_ids.sql', import.meta.url), 'utf8'));
+  sqlite.exec('COMMIT');
+  assert.deepEqual(snapshot(), before);
+  assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(), []);
+  sqlite.exec("DELETE FROM orders WHERE id = 'old'");
+  assert.deepEqual(snapshot(), [[], [], []]);
 });

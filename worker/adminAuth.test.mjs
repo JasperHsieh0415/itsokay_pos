@@ -8,7 +8,7 @@ import { createAdminSession, hashPassword, verifyPassword } from './adminAuth.ts
 function setup(t) {
   const sqlite = new DatabaseSync(':memory:');
   t.after(() => sqlite.close());
-  for (const name of ['0001_init.sql', '0002_add_menu_categories.sql', '0003_create_orders.sql', '0004_add_kitchen_workflow.sql', '0005_add_custom_discount.sql', '0006_create_users.sql', '0007_add_developer_role.sql']) {
+  for (const name of ['0001_init.sql', '0002_add_menu_categories.sql', '0003_create_orders.sql', '0004_add_kitchen_workflow.sql', '0005_add_custom_discount.sql', '0006_create_users.sql', '0007_add_developer_role.sql', '0008_expand_table_ids.sql']) {
     sqlite.exec(readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'));
   }
   function prepare(sql) {
@@ -51,11 +51,11 @@ test('first login creates one hashed admin and replaces legacy key access with s
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM users').get().count, 1);
 });
 
-test('password changes accept simple passwords and revoke all existing sessions and the initial key', async (t) => {
+test('password changes require only new passwords and revoke all existing sessions and the initial key', async (t) => {
   const { login, change, orders, sqlite } = setup(t);
   const first = (await (await login()).json()).data.token;
   const second = (await (await login()).json()).data.token;
-  const response = await change(first, { current_password: 'initial-secret', new_password: 'a', confirm_password: 'a' });
+  const response = await change(first, { new_password: 'a', confirm_password: 'a' });
   assert.equal(response.status, 200);
   assert.equal((await orders(first)).status, 401);
   assert.equal((await orders(second)).status, 401);
@@ -67,16 +67,18 @@ test('password changes accept simple passwords and revoke all existing sessions 
   assert.equal(await verifyPassword('a', sqlite.prepare('SELECT password_hash FROM users').get().password_hash), true);
 });
 
-test('invalid current passwords, mismatched confirmation and invalid payloads never change the saved password', async (t) => {
+test('mismatched confirmation and invalid payloads never change the saved password', async (t) => {
   const { login, change, orders, request, sqlite } = setup(t);
   const token = (await (await login()).json()).data.token;
   const hash = sqlite.prepare('SELECT password_hash FROM users').get().password_hash;
   for (const body of [
-    { current_password: 'wrong', new_password: 'b', confirm_password: 'b' },
-    { current_password: 'initial-secret', new_password: 'b', confirm_password: 'c' },
-    { current_password: 'initial-secret', new_password: '', confirm_password: '' },
-    { current_password: 'initial-secret', new_password: 'x'.repeat(1025), confirm_password: 'x'.repeat(1025) },
-    { current_password: 123, new_password: 'b', confirm_password: 'b' },
+    { new_password: 'b' },
+    { new_password: 'b', confirm_password: 'c' },
+    { new_password: '', confirm_password: '' },
+    { new_password: 'x'.repeat(1025), confirm_password: 'x'.repeat(1025) },
+    { new_password: 123, confirm_password: 'b' },
+    { new_password: 'b', confirm_password: 123 },
+    { confirm_password: 'b' },
     {}, null, [],
   ]) assert.equal((await change(token, body)).status, 400);
   const malformed = await request('/api/admin/account/password', {
@@ -92,7 +94,7 @@ test('invalid current passwords, mismatched confirmation and invalid payloads ne
 test('spaces in passwords are preserved and no character complexity is required', async (t) => {
   const { login, change } = setup(t);
   const token = (await (await login()).json()).data.token;
-  assert.equal((await change(token, { current_password: 'initial-secret', new_password: ' a ', confirm_password: ' a ' })).status, 200);
+  assert.equal((await change(token, { new_password: ' a ', confirm_password: ' a ' })).status, 200);
   assert.equal((await login('a')).status, 401);
   assert.equal((await login(' a ')).status, 200);
 });
@@ -164,7 +166,7 @@ test('developer credentials work at both portals and either session can read and
       assert.equal(kitchen.status, 200);
       assert.equal(sqlite.prepare("SELECT kitchen_status FROM order_items WHERE id = 'dev-item'").get().kitchen_status, 'ready');
     } else {
-      const updated = await change(token, { current_password: env.DEVELOPER_PASSWORD, new_password: 'dev-next', confirm_password: 'dev-next' });
+      const updated = await change(token, { new_password: 'dev-next', confirm_password: 'dev-next' });
       assert.equal(updated.status, 200);
     }
   }
@@ -205,7 +207,7 @@ test('regular staff cannot cross roles, impersonate a developer, or modify its p
   assert.equal((await staffLogin(request, 'chef', 'admin', 'initial-secret')).status, 200);
   const oldDevHash = sqlite.prepare("SELECT password_hash FROM users WHERE role = 'developer'").get().password_hash;
   const response = await change(adminToken, {
-    current_password: 'initial-secret', new_password: 'regular-next', confirm_password: 'regular-next',
+    new_password: 'regular-next', confirm_password: 'regular-next',
     id: sqlite.prepare("SELECT id FROM users WHERE role = 'developer'").get().id,
     username: env.DEVELOPER_USERNAME, role: 'developer',
   });
@@ -223,7 +225,7 @@ test('developer password changes revoke every portal session without changing no
     const response = await staffLogin(request, scope, env.DEVELOPER_USERNAME, env.DEVELOPER_PASSWORD);
     tokens.push((await response.json()).data.token);
   }
-  assert.equal((await change(tokens[0], { current_password: env.DEVELOPER_PASSWORD, new_password: 'x', confirm_password: 'x' })).status, 200);
+  assert.equal((await change(tokens[0], { new_password: 'x', confirm_password: 'x' })).status, 200);
   for (const token of tokens) {
     for (const scope of ['admin', 'chef']) assert.equal((await staffGet(request, scope, token)).status, 401);
   }
@@ -299,7 +301,7 @@ test('changing the shared password invalidates both normal sessions and updates 
   const { request, login, change } = setup(t);
   const adminToken = (await (await login()).json()).data.token;
   const chefToken = (await (await staffLogin(request, 'chef', undefined, 'initial-secret')).json()).data.token;
-  assert.equal((await change(adminToken, { current_password: 'initial-secret', new_password: 'shared-next', confirm_password: 'shared-next' })).status, 200);
+  assert.equal((await change(adminToken, { new_password: 'shared-next', confirm_password: 'shared-next' })).status, 200);
   assert.equal((await staffGet(request, 'admin', adminToken)).status, 401);
   assert.equal((await staffGet(request, 'chef', chefToken)).status, 401);
   for (const scope of ['admin', 'chef']) {
@@ -331,7 +333,7 @@ test('shared passwords containing colons remain unchanged and developer password
   const { request, env, login, change } = setup(t);
   const adminToken = (await (await login()).json()).data.token;
   const shared = ' staff:password: ';
-  assert.equal((await change(adminToken, { current_password: 'initial-secret', new_password: shared, confirm_password: shared })).status, 200);
+  assert.equal((await change(adminToken, { new_password: shared, confirm_password: shared })).status, 200);
   for (const scope of ['admin', 'chef']) {
     assert.equal((await staffLogin(request, scope, undefined, shared)).status, 200);
     assert.equal((await staffLogin(request, scope, undefined, shared.trim())).status, 401);
@@ -346,7 +348,7 @@ test('normal chef sessions cannot change the shared password or forge an admin s
   const { request, change } = setup(t);
   const response = await staffLogin(request, 'chef', undefined, 'initial-secret');
   const token = (await response.json()).data.token;
-  assert.equal((await change(token, { current_password: 'initial-secret', new_password: 'bad', confirm_password: 'bad' })).status, 401);
+  assert.equal((await change(token, { new_password: 'bad', confirm_password: 'bad' })).status, 401);
   const [payload, signature] = token.split('.');
   const claims = JSON.parse(Buffer.from(payload, 'base64url').toString());
   claims.scope = 'admin';

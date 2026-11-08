@@ -125,7 +125,7 @@ type ProductRow = {
 
 const VALID_TABLE_IDS = new Set([
   'T01', 'T02', 'T03', 'T04',
-  'T05', 'T06', 'T07', 'T08',
+  'T05', 'T06', 'T07', 'T09', 'T11',
 ]);
 
 app.post('/api/orders', async (c) => {
@@ -585,13 +585,12 @@ app.patch('/api/admin/account/password', async (c) => {
   try { body = await c.req.json(); }
   catch { return c.json({ success: false, error: '密碼資料格式不正確' }, 400); }
   if (!body || typeof body !== 'object' || Array.isArray(body)) return c.json({ success: false, error: '密碼資料格式不正確' }, 400);
-  const { current_password, new_password, confirm_password } = body as Record<string, unknown>;
-  if (!validPassword(current_password) || !validPassword(new_password) || !validPassword(confirm_password)) {
+  const { new_password, confirm_password } = body as Record<string, unknown>;
+  if (!validPassword(new_password) || !validPassword(confirm_password)) {
     return c.json({ success: false, error: '請填寫所有密碼欄位（最多 1024 字元）' }, 400);
   }
   if (new_password !== confirm_password) return c.json({ success: false, error: '新密碼與確認新密碼不一致' }, 400);
   try {
-    if (!await verifyPassword(current_password, user.password_hash)) return c.json({ success: false, error: '目前密碼不正確' }, 400);
     const hash = await hashPassword(new_password);
     const updated = await c.env.DB.prepare(`
       UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP
